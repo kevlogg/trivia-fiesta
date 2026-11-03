@@ -1,14 +1,34 @@
 import { NextResponse } from "next/server";
-import { getClientQuestions, getSettings } from "@/lib/trivia-service";
+import { getClientQuestions, getActiveEvent, getEventById } from "@/lib/trivia-service";
 
-export async function GET() {
+export const dynamic = "force-dynamic";
+
+export async function GET(request: Request) {
   try {
-    const questions = await getClientQuestions();
-    const settings = await getSettings();
+    const { searchParams } = new URL(request.url);
+    const eventIdParam = searchParams.get("eventId");
+
+    let event = null;
+    if (eventIdParam) {
+      event = await getEventById(eventIdParam);
+    } else {
+      event = await getActiveEvent();
+    }
+
+    if (!event) {
+      return NextResponse.json({
+        hasActiveEvent: false,
+        questions: [],
+        totalQuestions: 0,
+      });
+    }
+
+    const questions = await getClientQuestions(event.id);
 
     return NextResponse.json({
+      hasActiveEvent: true,
+      event,
       questions,
-      settings,
       totalQuestions: questions.length,
     });
   } catch (error) {

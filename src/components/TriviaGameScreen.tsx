@@ -16,7 +16,7 @@ interface TriviaGameScreenProps {
 
 const TOTAL_QUESTION_TIME_SEC = 10;
 const OPTION_LETTERS = ["A", "B", "C", "D"];
-const FEEDBACK_DELAY_MS = 750; // Visible feedback for 0.75s before next question
+const FEEDBACK_DELAY_MS = 750; // Visible feedback for 0.75s before automatically advancing
 
 export default function TriviaGameScreen({
   player,
@@ -79,7 +79,7 @@ export default function TriviaGameScreen({
     [currentIndex, questions.length, onGameFinished]
   );
 
-  // Core selection handler: ONLY called by clicking an option button OR strictly on 10s timeout
+  // Core selection handler: ONLY called by tapping an option button OR strictly on 10s timeout
   const handleSelectOption = useCallback(
     async (optionIndex: number | null, forcedTimeMs?: number) => {
       // Guard: only 1 answer can be registered per question
@@ -133,14 +133,14 @@ export default function TriviaGameScreen({
         const data: SubmitAnswerResponse = await res.json();
 
         if (!res.ok) {
-          // If already registered, advance cleanly
+          // If already registered or error, advance cleanly
           advanceToNext(currentIndex + 1 >= questions.length);
           return;
         }
 
         setLastResult(data);
 
-        // Sound & celebratory feedback
+        // Audio & celebratory feedback
         if (data.isCorrect) {
           sound.playCorrect();
           fireMiniConfetti();
@@ -155,7 +155,7 @@ export default function TriviaGameScreen({
           onPlayerScoreUpdate(data.currentScore, data.totalTimeMs);
         }
 
-        // Advance to next question after feedback delay (0.75s)
+        // Advance to next question after visible feedback delay (0.75s)
         autoNextTimeoutRef.current = setTimeout(() => {
           advanceToNext(data.isFinished);
         }, FEEDBACK_DELAY_MS);
@@ -243,7 +243,7 @@ export default function TriviaGameScreen({
         autoNextTimeoutRef.current = null;
       }
     };
-  }, [currentIndex]); // Purely dependent on currentIndex!
+  }, [currentIndex]);
 
   if (!currentQuestion) {
     return null;
@@ -267,20 +267,20 @@ export default function TriviaGameScreen({
     : "bg-gradient-to-r from-emerald-400 to-teal-500";
 
   return (
-    <div className="w-full max-w-md mx-auto px-4 py-5 flex flex-col min-h-screen justify-between select-none">
-      {/* Top Bar: Progress, Score & Sound */}
-      <div>
-        <div className="flex items-center justify-between mb-3 text-xs">
-          <div className="flex items-center gap-2">
-            <span className="text-xl">{player.avatar}</span>
-            <span className="font-bold text-slate-200 truncate max-w-[120px]">
+    <div className="w-full max-w-md mx-auto px-3.5 py-3 h-[100dvh] max-h-[100dvh] overflow-hidden flex flex-col justify-between select-none">
+      {/* Top Header: Player Info, Score & Sound */}
+      <header className="shrink-0 space-y-2">
+        <div className="flex items-center justify-between text-xs">
+          <div className="flex items-center gap-1.5 truncate max-w-[55%]">
+            <span className="text-xl shrink-0">{player.avatar}</span>
+            <span className="font-extrabold text-slate-200 truncate">
               {player.firstName} {player.lastName[0]}.
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 shrink-0">
             {/* Current Score */}
-            <div className="px-3 py-1 rounded-full bg-purple-950/80 border border-purple-500/40 text-purple-300 font-extrabold flex items-center gap-1 shadow-sm">
+            <div className="px-2.5 py-0.5 rounded-full bg-purple-950/80 border border-purple-500/40 text-purple-300 font-black text-xs flex items-center gap-1 shadow-sm">
               <span>⭐</span>
               <span>{currentScore} pts</span>
             </div>
@@ -289,63 +289,66 @@ export default function TriviaGameScreen({
             <button
               onClick={handleToggleSound}
               type="button"
-              className="p-1.5 rounded-full bg-slate-800 border border-slate-700 text-slate-300 hover:text-white cursor-pointer"
+              className="p-1 rounded-full bg-slate-800 border border-slate-700 text-slate-300 hover:text-white cursor-pointer"
               aria-label={isMuted ? "Activar sonido" : "Silenciar"}
             >
-              {isMuted ? <VolumeX className="w-4 h-4" /> : <Music className="w-4 h-4 text-emerald-400" />}
+              {isMuted ? <VolumeX className="w-3.5 h-3.5" /> : <Music className="w-3.5 h-3.5 text-emerald-400" />}
             </button>
           </div>
         </div>
 
-        {/* Progress Bar */}
-        <div className="flex items-center justify-between text-xs text-slate-400 mb-1.5 font-semibold">
-          <span>
-            Pregunta {currentIndex + 1} de {questions.length}
-          </span>
-          <span>{Math.round(((currentIndex + 1) / questions.length) * 100)}%</span>
-        </div>
-        <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden mb-4">
-          <div
-            className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-300 rounded-full"
-            style={{ width: `${((currentIndex + 1) / questions.length) * 100}%` }}
-          />
+        {/* Progress Bar & Question Counter */}
+        <div className="space-y-1">
+          <div className="flex items-center justify-between text-[11px] text-slate-400 font-bold">
+            <span>
+              Pregunta {currentIndex + 1} de {questions.length}
+            </span>
+            <span>{Math.round(((currentIndex + 1) / questions.length) * 100)}%</span>
+          </div>
+          <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-300 rounded-full"
+              style={{ width: `${((currentIndex + 1) / questions.length) * 100}%` }}
+            />
+          </div>
         </div>
 
-        {/* Strict 10s Timer Countdown Banner */}
-        <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-3 shadow-xl mb-4">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-1.5 text-xs font-bold text-slate-300">
-              <Clock className={`w-4 h-4 ${isUrgent ? "text-rose-400 animate-spin" : "text-amber-400"}`} />
+        {/* Strict 10s Timer Banner */}
+        <div className="bg-slate-900/90 border border-slate-800 rounded-xl px-3 py-1.5 shadow-md">
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center gap-1 text-[11px] font-bold text-slate-300">
+              <Clock className={`w-3.5 h-3.5 ${isUrgent ? "text-rose-400 animate-spin" : "text-amber-400"}`} />
               <span>Tiempo Restante:</span>
             </div>
 
             <div
-              className={`px-3 py-0.5 rounded-lg border font-mono font-black text-sm tracking-wider transition-all ${timerColorClass}`}
+              className={`px-2 py-0.5 rounded-md border font-mono font-black text-xs tracking-wider transition-all ${timerColorClass}`}
             >
               {remainingTime.toFixed(1)}s
             </div>
           </div>
 
-          <div className="w-full h-2.5 bg-slate-800/90 rounded-full overflow-hidden p-0.5">
+          <div className="w-full h-1.5 bg-slate-800/90 rounded-full overflow-hidden">
             <div
               className={`h-full rounded-full transition-all duration-75 ${barColorClass}`}
               style={{ width: `${timerPercentage}%` }}
             />
           </div>
         </div>
-      </div>
+      </header>
 
-      {/* Question Card: No onClick on the card container so background clicks do nothing */}
-      <div className="flex-1 flex flex-col justify-center my-2">
-        <div className="bg-slate-900/90 backdrop-blur-md border border-slate-800 rounded-3xl p-5 shadow-2xl relative overflow-hidden">
+      {/* Main Question & Options Area (Centered and strictly contained) */}
+      <div className="flex-1 flex flex-col justify-center min-h-0 my-1.5">
+        <div className="bg-slate-900/90 backdrop-blur-md border border-slate-800 rounded-2xl p-3.5 shadow-2xl relative overflow-hidden flex flex-col justify-between">
           <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500" />
 
-          <h2 className="text-xl font-bold text-white leading-snug mb-5 pt-2 text-center">
+          {/* Question Text */}
+          <h2 className="text-base sm:text-lg font-black text-white leading-snug my-1 text-center line-clamp-3">
             {currentQuestion.question}
           </h2>
 
-          {/* Options Grid: Disabled immediately when an answer is chosen or time runs out */}
-          <div className={`space-y-3 ${isAnswerSubmitted ? "pointer-events-none select-none" : ""}`}>
+          {/* Options Grid: Touch-optimized, no-scroll */}
+          <div className={`space-y-2 mt-2 ${isAnswerSubmitted ? "pointer-events-none select-none" : ""}`}>
             {currentQuestion.options.map((option, idx) => {
               const letter = OPTION_LETTERS[idx] || `${idx + 1}`;
               const isSelected = selectedOption === idx;
@@ -354,12 +357,12 @@ export default function TriviaGameScreen({
               const isThisWrongSelected = hasResult && isSelected && !lastResult.isCorrect;
 
               let btnStyle =
-                "bg-slate-800/70 border-slate-700/80 text-slate-100 hover:bg-slate-800 hover:border-purple-500/50 active:scale-[0.98]";
+                "bg-slate-800/70 border-slate-700/80 text-slate-100 hover:bg-slate-800 active:scale-[0.98]";
 
               if (hasResult) {
                 if (isThisCorrect) {
                   btnStyle =
-                    "bg-emerald-500/20 border-emerald-400 text-emerald-200 ring-2 ring-emerald-500/50 scale-[1.02] shadow-lg shadow-emerald-500/20";
+                    "bg-emerald-500/20 border-emerald-400 text-emerald-200 ring-2 ring-emerald-500/50 scale-[1.01] shadow-lg shadow-emerald-500/20";
                 } else if (isThisWrongSelected) {
                   btnStyle =
                     "bg-rose-500/20 border-rose-500 text-rose-200 ring-2 ring-rose-500/40 animate-shake";
@@ -377,10 +380,10 @@ export default function TriviaGameScreen({
                   type="button"
                   disabled={isAnswerSubmitted}
                   onClick={() => handleSelectOption(idx)}
-                  className={`w-full p-3.5 rounded-2xl border text-left transition-all duration-100 flex items-center gap-3.5 cursor-pointer disabled:cursor-not-allowed ${btnStyle}`}
+                  className={`w-full py-2.5 px-3 rounded-xl border text-left transition-all duration-100 flex items-center gap-2.5 cursor-pointer disabled:cursor-not-allowed ${btnStyle}`}
                 >
                   <span
-                    className={`w-8 h-8 rounded-xl font-bold text-sm flex items-center justify-center shrink-0 transition-colors ${
+                    className={`w-7 h-7 rounded-lg font-black text-xs flex items-center justify-center shrink-0 transition-colors ${
                       hasResult && isThisCorrect
                         ? "bg-emerald-500 text-slate-950 font-black"
                         : hasResult && isThisWrongSelected
@@ -393,19 +396,19 @@ export default function TriviaGameScreen({
                     {letter}
                   </span>
 
-                  <span className="text-sm font-semibold flex-1 leading-snug">
+                  <span className="text-xs sm:text-sm font-semibold flex-1 leading-tight line-clamp-2">
                     {option}
                   </span>
 
                   {/* Feedback icons */}
                   {isSelected && !hasResult && (
-                    <span className="w-4 h-4 border-2 border-purple-300 border-t-transparent rounded-full animate-spin shrink-0" />
+                    <span className="w-3.5 h-3.5 border-2 border-purple-300 border-t-transparent rounded-full animate-spin shrink-0" />
                   )}
                   {hasResult && isThisCorrect && (
-                    <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 animate-bounce" />
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 animate-bounce" />
                   )}
                   {hasResult && isThisWrongSelected && (
-                    <XCircle className="w-5 h-5 text-rose-400 shrink-0" />
+                    <XCircle className="w-4 h-4 text-rose-400 shrink-0" />
                   )}
                 </button>
               );
@@ -414,44 +417,44 @@ export default function TriviaGameScreen({
 
           {/* Feedback & Result Banner */}
           {lastResult && (
-            <div className="mt-4 pt-3 border-t border-slate-800 animate-fadeIn">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-1.5">
+            <div className="mt-2 pt-2 border-t border-slate-800/80 animate-fadeIn">
+              <div className="flex items-center justify-between">
+                <div>
                   {lastResult.isCorrect ? (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 animate-bounce">
-                      <Sparkles className="w-3.5 h-3.5" /> ¡CORRECTO!
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 animate-bounce">
+                      <Sparkles className="w-3 h-3" /> ¡CORRECTO!
                     </span>
                   ) : selectedOption === null ? (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black bg-rose-500/20 text-rose-300 border border-rose-500/40">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-black bg-rose-500/20 text-rose-300 border border-rose-500/40">
                       ⏱️ ¡TIEMPO AGOTADO! (10.0s)
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black bg-rose-500/20 text-rose-300 border border-rose-500/40">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-black bg-rose-500/20 text-rose-300 border border-rose-500/40">
                       ❌ INCORRECTO
                     </span>
                   )}
                 </div>
 
                 {elapsedTimeDisplay !== null && (
-                  <span className="inline-flex items-center gap-1 text-xs font-mono font-bold text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded-lg border border-amber-500/30">
+                  <span className="inline-flex items-center gap-1 text-[11px] font-mono font-bold text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/30">
                     <Zap className="w-3 h-3 text-amber-400" />
                     {(elapsedTimeDisplay / 1000).toFixed(2)}s
                   </span>
                 )}
               </div>
 
-              <div className="text-center text-[11px] text-purple-300 pt-1 font-semibold animate-pulse">
-                Pasando a la siguiente pregunta...
+              <div className="text-center text-[10px] text-purple-300 pt-1 font-semibold animate-pulse">
+                Avanzando a la siguiente pregunta...
               </div>
             </div>
           )}
         </div>
       </div>
 
-      {/* Bottom Hint */}
-      <div className="text-center text-slate-500 text-xs py-1">
-        ⏱️ 10 segundos por pregunta • Se registra tu tiempo exacto
-      </div>
+      {/* Footer Info */}
+      <footer className="text-center shrink-0 pt-0.5 text-slate-500 text-[11px]">
+        ⏱️ 10s por pregunta • Desempate por menor tiempo total acumulado
+      </footer>
     </div>
   );
 }

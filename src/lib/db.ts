@@ -50,6 +50,21 @@ export async function ensureSchema(): Promise<void> {
 
   const client = getDatabase();
 
+  // 1. Events Table (Multi-Event Architecture)
+  await client.execute(`
+    CREATE TABLE IF NOT EXISTS events (
+      id TEXT PRIMARY KEY,
+      slug TEXT UNIQUE NOT NULL,
+      title TEXT NOT NULL,
+      birthday_person TEXT NOT NULL,
+      timer_seconds INTEGER NOT NULL DEFAULT 10,
+      status TEXT NOT NULL DEFAULT 'inactive',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+  `);
+
+  // 2. Settings table
   await client.execute(`
     CREATE TABLE IF NOT EXISTS settings (
       key TEXT PRIMARY KEY,
@@ -57,9 +72,11 @@ export async function ensureSchema(): Promise<void> {
     );
   `);
 
+  // 3. Players table
   await client.execute(`
     CREATE TABLE IF NOT EXISTS players (
       id TEXT PRIMARY KEY,
+      event_id TEXT DEFAULT 'default-event',
       first_name TEXT NOT NULL,
       last_name TEXT NOT NULL,
       avatar TEXT NOT NULL DEFAULT '🥳',
@@ -71,10 +88,12 @@ export async function ensureSchema(): Promise<void> {
     );
   `);
 
+  // 4. Questions table
   await client.execute(`
     CREATE TABLE IF NOT EXISTS questions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      order_num INTEGER NOT NULL UNIQUE,
+      event_id TEXT DEFAULT 'default-event',
+      order_num INTEGER NOT NULL,
       question TEXT NOT NULL,
       options TEXT NOT NULL,
       correct_index INTEGER NOT NULL,
@@ -82,6 +101,7 @@ export async function ensureSchema(): Promise<void> {
     );
   `);
 
+  // 5. Player Answers table
   await client.execute(`
     CREATE TABLE IF NOT EXISTS player_answers (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -95,32 +115,74 @@ export async function ensureSchema(): Promise<void> {
     );
   `);
 
-  // Default settings
-  await client.execute({
-    sql: "INSERT OR IGNORE INTO settings (key, value) VALUES ('birthday_person', 'el Cumpleañero')",
-    args: [],
-  });
-  await client.execute({
-    sql: "INSERT OR IGNORE INTO settings (key, value) VALUES ('event_title', '🎉 Trivia de Cumpleaños')",
-    args: [],
-  });
-  await client.execute({
-    sql: "INSERT OR IGNORE INTO settings (key, value) VALUES ('question_timer_seconds', '10')",
-    args: [],
-  });
+  // Column migrations in case tables existed without event_id
+  try {
+    await client.execute("ALTER TABLE questions ADD COLUMN event_id TEXT DEFAULT 'default-event'");
+  } catch {
+    // already exists
+  }
+  try {
+    await client.execute("ALTER TABLE players ADD COLUMN event_id TEXT DEFAULT 'default-event'");
+  } catch {
+    // already exists
+  }
 
-  // Check if questions exist
-  const res = await client.execute("SELECT COUNT(*) as c FROM questions");
-  const count = Number(res.rows[0]?.c || 0);
+  // Safe migration: Remove obsolete global UNIQUE constraint on order_num so each event can have its own questions 1..10
+  try {
+    const tableInfo = await client.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='questions'");
+    const sqlStr = String(tableInfo.rows[0]?.sql || "");
+    if (sqlStr.includes("order_num INTEGER NOT NULL UNIQUE")) {
+      await client.execute(`
+        CREATE TABLE questions_v2 (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          event_id TEXT DEFAULT 'default-event',
+          order_num INTEGER NOT NULL,
+          question TEXT NOT NULL,
+          options TEXT NOT NULL,
+          correct_index INTEGER NOT NULL,
+          explanation TEXT NOT NULL
+        );
+      `);
+      await client.execute(`
+        INSERT INTO questions_v2 (id, event_id, order_num, question, options, correct_index, explanation)
+        SELECT id, COALESCE(event_id, 'default-event'), order_num, question, options, correct_index, explanation
+        FROM questions;
+      `);
+      await client.execute("DROP TABLE questions;");
+      await client.execute("ALTER TABLE questions_v2 RENAME TO questions;");
+    }
+  } catch {
+    // Already migrated
+  }
 
-  if (count === 0) {
-    await seedQuestions(client);
+  // Ensure at least one default event exists
+  const eventsCountRes = await client.execute("SELECT COUNT(*) as c FROM events");
+  const eventsCount = Number(eventsCountRes.rows[0]?.c || 0);
+
+  if (eventsCount === 0) {
+    const now = new Date().toISOString();
+    await client.execute({
+      sql: `INSERT INTO events (id, slug, title, birthday_person, timer_seconds, status, created_at, updated_at)
+            VALUES ('default-event', 'cumple-principal', '🎉 Trivia de Cumpleaños', 'el Cumpleañero', 10, 'active', ?, ?)`,
+      args: [now, now],
+    });
+  }
+
+  // Check if questions exist for default-event
+  const qRes = await client.execute("SELECT COUNT(*) as c FROM questions WHERE event_id = 'default-event' OR event_id IS NULL");
+  const qCount = Number(qRes.rows[0]?.c || 0);
+
+  if (qCount === 0) {
+    await seedQuestionsForEvent(client, "default-event");
+  } else {
+    // Update any legacy questions with null event_id
+    await client.execute("UPDATE questions SET event_id = 'default-event' WHERE event_id IS NULL");
   }
 
   global.__schemaInitialized = true;
 }
 
-export async function seedQuestions(client: Client) {
+export async function seedQuestionsForEvent(client: Client, eventId: string) {
   const defaultQuestions = [
     {
       order_num: 1,
@@ -246,11 +308,16 @@ export async function seedQuestions(client: Client) {
 
   for (const q of defaultQuestions) {
     await client.execute({
-      sql: `INSERT OR IGNORE INTO questions (order_num, question, options, correct_index, explanation)
-            VALUES (?, ?, ?, ?, ?)`,
-      args: [q.order_num, q.question, q.options, q.correct_index, q.explanation],
+      sql: `INSERT INTO questions (event_id, order_num, question, options, correct_index, explanation)
+            VALUES (?, ?, ?, ?, ?, ?)`,
+      args: [eventId, q.order_num, q.question, q.options, q.correct_index, q.explanation],
     });
   }
+}
+
+// Backward compatibility alias
+export async function seedQuestions(client: Client) {
+  return seedQuestionsForEvent(client, "default-event");
 }
 
 export const db = getDatabase();

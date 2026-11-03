@@ -1,10 +1,32 @@
 import { NextResponse } from "next/server";
-import { updateQuestion, resetQuestionsToDefault, getAllQuestionsAdmin } from "@/lib/trivia-service";
+import {
+  updateQuestion,
+  resetQuestionsToDefault,
+  getAllQuestionsAdmin,
+  getActiveEvent,
+  getEventById,
+} from "@/lib/trivia-service";
 
-export async function GET() {
+export const dynamic = "force-dynamic";
+
+export async function GET(request: Request) {
   try {
-    const questions = await getAllQuestionsAdmin();
-    return NextResponse.json({ questions });
+    const { searchParams } = new URL(request.url);
+    const eventIdParam = searchParams.get("eventId");
+
+    let event = null;
+    if (eventIdParam) {
+      event = await getEventById(eventIdParam);
+    } else {
+      event = await getActiveEvent();
+    }
+
+    if (!event) {
+      return NextResponse.json({ hasActiveEvent: false, questions: [] });
+    }
+
+    const questions = await getAllQuestionsAdmin(event.id);
+    return NextResponse.json({ hasActiveEvent: true, event, questions });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Error al obtener preguntas";
     return NextResponse.json({ error: message }, { status: 500 });
@@ -37,8 +59,10 @@ export async function PUT(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
-    if (body.action === "reset_default") {
-      const questions = await resetQuestionsToDefault();
+    const { action, eventId } = body;
+
+    if (action === "reset_default") {
+      const questions = await resetQuestionsToDefault(eventId);
       return NextResponse.json({ success: true, questions });
     }
 
@@ -48,4 +72,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
-

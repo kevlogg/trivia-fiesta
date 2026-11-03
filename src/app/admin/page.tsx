@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, Suspense } from "react";
 import Link from "next/link";
-import { TriviaSettings, QuestionAdmin } from "@/types/trivia";
+import { useSearchParams } from "next/navigation";
+import { TriviaSettings, QuestionAdmin, TriviaEvent } from "@/types/trivia";
 import {
   Settings,
   Tv,
@@ -17,11 +18,19 @@ import {
   X,
   Check,
   RotateCcw,
+  Sparkles,
+  ShieldCheck,
+  ArrowLeft,
 } from "lucide-react";
 
 const OPTION_LETTERS = ["A", "B", "C", "D"];
 
-export default function AdminPage() {
+function AdminContent() {
+  const searchParams = useSearchParams();
+  const eventIdParam = searchParams.get("eventId");
+
+  const [hasEvent, setHasEvent] = useState<boolean | null>(null);
+  const [currentEvent, setCurrentEvent] = useState<TriviaEvent | null>(null);
   const [settings, setSettings] = useState<TriviaSettings>({
     birthdayPerson: "",
     eventTitle: "",
@@ -54,14 +63,23 @@ export default function AdminPage() {
 
   const fetchAdminData = useCallback(async () => {
     try {
+      const qUrl = eventIdParam ? `/api/admin/questions?eventId=${eventIdParam}` : "/api/admin/questions";
+      const sUrl = eventIdParam ? `/api/settings?eventId=${eventIdParam}` : "/api/settings";
+
       const [settingsRes, questionsRes] = await Promise.all([
-        fetch("/api/settings"),
-        fetch("/api/admin/questions"),
+        fetch(sUrl),
+        fetch(qUrl),
       ]);
 
       if (settingsRes.ok) {
         const sData = await settingsRes.json();
-        setSettings(sData.settings);
+        if (sData.hasActiveEvent && sData.event) {
+          setHasEvent(true);
+          setCurrentEvent(sData.event);
+          setSettings(sData.settings);
+        } else {
+          setHasEvent(false);
+        }
       }
 
       if (questionsRes.ok) {
@@ -70,8 +88,9 @@ export default function AdminPage() {
       }
     } catch (err) {
       console.error("Admin data fetch error:", err);
+      setHasEvent(false);
     }
-  }, []);
+  }, [eventIdParam]);
 
   useEffect(() => {
     fetchAdminData();
@@ -158,7 +177,10 @@ export default function AdminPage() {
       const res = await fetch("/api/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(settings),
+        body: JSON.stringify({
+          ...settings,
+          eventId: currentEvent?.id || eventIdParam,
+        }),
       });
 
       if (res.ok) {
@@ -179,12 +201,15 @@ export default function AdminPage() {
       const res = await fetch("/api/admin/reset", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ confirm: true }),
+        body: JSON.stringify({
+          confirm: true,
+          eventId: currentEvent?.id || eventIdParam,
+        }),
       });
 
       if (res.ok) {
         setShowConfirmResetGame(false);
-        alert("¡Todas las partidas y respuestas de prueba fueron eliminadas con éxito!");
+        alert("¡Todas las partidas y respuestas de este evento fueron reiniciadas con éxito!");
       }
     } catch (err) {
       console.error("Error resetting game:", err);
@@ -200,15 +225,18 @@ export default function AdminPage() {
       const res = await fetch("/api/admin/questions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "reset_default" }),
+        body: JSON.stringify({
+          action: "reset_default",
+          eventId: currentEvent?.id || eventIdParam,
+        }),
       });
 
       const data = await res.json();
       if (res.ok) {
-        setQuestions(data.questions || []);
+        setQuestions(data.questions);
         setShowConfirmResetQuestions(false);
         setEditingQuestionId(null);
-        setQuestionSuccessMessage("¡Las 10 preguntas por defecto fueron restablecidas!");
+        setQuestionSuccessMessage("Preguntas restablecidas a la plantilla predeterminada");
         setTimeout(() => setQuestionSuccessMessage(""), 4000);
       }
     } catch (err) {
@@ -218,111 +246,166 @@ export default function AdminPage() {
     }
   };
 
+  // If no active event exists
+  if (hasEvent === false) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-16 text-center">
+        <div className="w-16 h-16 rounded-3xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center mx-auto mb-4 text-3xl">
+          🎪
+        </div>
+        <h1 className="text-2xl font-black text-white mb-2">No Hay Ningún Evento Activo</h1>
+        <p className="text-slate-400 text-sm mb-6 max-w-md mx-auto">
+          Para editar preguntas o gestionar una trivia, debe haber un evento activo o tenés que abrir el enlace con el ID de tu evento.
+        </p>
+        <div className="flex items-center justify-center gap-3">
+          <Link
+            href="/superadmin"
+            className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-sm shadow-lg flex items-center gap-2"
+          >
+            <ShieldCheck className="w-4 h-4" />
+            <span>Ir al Panel SuperAdmin</span>
+          </Link>
+          <Link
+            href="/"
+            className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-sm"
+          >
+            Volver al Inicio
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-slate-950 text-white p-4 sm:p-6 max-w-4xl mx-auto">
+    <div className="max-w-4xl mx-auto px-4 py-8">
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-slate-800 gap-4">
+      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-6 mb-8">
         <div>
-          <div className="flex items-center gap-2">
-            <Settings className="w-6 h-6 text-purple-400" />
-            <h1 className="text-2xl font-black bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-              Panel del Anfitrión / Cumpleañero
-            </h1>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="p-2 rounded-xl bg-purple-600/20 border border-purple-500/30 text-purple-400">
+              <Settings className="w-5 h-5" />
+            </span>
+            <span className="text-xs font-bold text-purple-400 uppercase tracking-wider">
+              Panel del Organizador
+            </span>
+            {currentEvent && (
+              <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-[11px] font-bold">
+                ● {currentEvent.title}
+              </span>
+            )}
           </div>
-          <p className="text-xs text-slate-400 mt-1">
-            Editá las preguntas y respuestas, configurá los nombres y administrá la fiesta.
+          <h1 className="text-2xl sm:text-3xl font-black text-white">
+            Configuración y Preguntas de la Fiesta
+          </h1>
+          <p className="text-xs sm:text-sm text-slate-400 mt-1">
+            Personalizá los nombres, preguntas y respuestas sobre el cumpleañero antes del juego.
           </p>
         </div>
 
-        {/* Quick Link Navigation */}
+        {/* Quick Nav Links */}
         <div className="flex items-center gap-2">
           <Link
             href="/tv"
             target="_blank"
-            className="px-3.5 py-2 rounded-xl bg-purple-600/30 border border-purple-500/50 text-purple-200 text-xs font-bold hover:bg-purple-600/50 flex items-center gap-1.5 transition-colors"
+            className="px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-800 hover:border-purple-500/50 text-slate-200 text-xs font-bold flex items-center gap-1.5 transition-all"
           >
-            <Tv className="w-4 h-4" />
-            <span>Pantalla TV / QR</span>
+            <Tv className="w-4 h-4 text-purple-400" />
+            <span>Ver Pantalla TV</span>
           </Link>
           <Link
             href="/"
             target="_blank"
-            className="px-3.5 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 text-xs font-bold hover:bg-slate-700 flex items-center gap-1.5 transition-colors"
+            className="px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-800 hover:border-purple-500/50 text-slate-200 text-xs font-bold flex items-center gap-1.5 transition-all"
           >
-            <Smartphone className="w-4 h-4" />
-            <span>Ver Modo Celular</span>
+            <Smartphone className="w-4 h-4 text-pink-400" />
+            <span>Celular</span>
+          </Link>
+          <Link
+            href="/superadmin"
+            className="px-3.5 py-2 rounded-xl bg-purple-950/60 border border-purple-500/40 hover:bg-purple-900/60 text-purple-300 text-xs font-bold flex items-center gap-1.5 transition-all"
+          >
+            <ShieldCheck className="w-4 h-4 text-purple-400" />
+            <span>SuperAdmin</span>
           </Link>
         </div>
-      </div>
+      </header>
 
-      {/* Settings Form */}
-      <div className="mt-8 bg-slate-900/80 border border-slate-800 rounded-3xl p-6 shadow-xl">
-        <h2 className="text-base font-bold text-white mb-4 flex items-center gap-2">
-          <Save className="w-4 h-4 text-emerald-400" />
-          <span>Datos del Evento</span>
+      {/* Global Event Settings Form */}
+      <div className="bg-slate-900/60 border border-slate-800 rounded-3xl p-6 shadow-xl mb-8">
+        <h2 className="text-base font-bold text-white flex items-center gap-2 mb-4">
+          <Sparkles className="w-4 h-4 text-pink-400" />
+          <span>Datos Generales del Evento</span>
         </h2>
 
         <form onSubmit={handleSaveSettings} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                Nombre del Cumpleañero/a
+              <label className="block text-xs font-bold text-slate-300 mb-1">
+                Nombre del Cumpleañero / Homenajeado
               </label>
               <input
                 type="text"
+                required
                 value={settings.birthdayPerson}
-                onChange={(e) => setSettings({ ...settings, birthdayPerson: e.target.value })}
-                placeholder="Ej: Martín, Sofi, Lucas"
-                className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                onChange={(e) =>
+                  setSettings({ ...settings, birthdayPerson: e.target.value })
+                }
+                placeholder="Ej: Marcos, Sofía, Lucas..."
+                className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+              <label className="block text-xs font-bold text-slate-300 mb-1">
                 Título del Evento
               </label>
               <input
                 type="text"
+                required
                 value={settings.eventTitle}
-                onChange={(e) => setSettings({ ...settings, eventTitle: e.target.value })}
-                placeholder="Ej: 🎉 ¡Cumple de 30 de Martín!"
-                className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                onChange={(e) =>
+                  setSettings({ ...settings, eventTitle: e.target.value })
+                }
+                placeholder="Ej: 🎉 Cumpleaños de Marcos - 30 Años"
+                className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
               />
             </div>
           </div>
 
           <div className="flex items-center justify-between pt-2">
-            {savedSettingsSuccess && (
-              <span className="text-xs text-emerald-400 font-bold flex items-center gap-1">
-                <CheckCircle2 className="w-4 h-4" /> ¡Guardado correctamente!
-              </span>
-            )}
-            <div className="ml-auto">
-              <button
-                type="submit"
-                disabled={isSavingSettings}
-                className="px-5 py-2.5 rounded-xl font-bold text-xs bg-purple-600 hover:bg-purple-500 text-white shadow-lg transition-all cursor-pointer disabled:opacity-50"
-              >
-                {isSavingSettings ? "Guardando..." : "Guardar Cambios"}
-              </button>
-            </div>
+            <span className="text-xs text-slate-500">
+              ⚡ Temporizador: <strong>10 segundos</strong> estrictos por pregunta
+            </span>
+
+            <button
+              type="submit"
+              disabled={isSavingSettings}
+              className="px-5 py-2.5 rounded-xl font-bold text-white bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 active:scale-[0.98] transition-all text-xs flex items-center gap-2 cursor-pointer disabled:opacity-50"
+            >
+              <Save className="w-4 h-4" />
+              <span>{isSavingSettings ? "Guardando..." : "Guardar Nombres"}</span>
+            </button>
           </div>
+
+          {savedSettingsSuccess && (
+            <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs text-center font-bold animate-fadeIn">
+              ✓ ¡Datos del evento actualizados con éxito!
+            </div>
+          )}
         </form>
       </div>
 
-      {/* Interactive Questions & Answers Editor Section */}
-      <div className="mt-8 bg-slate-900/80 border border-slate-800 rounded-3xl p-6 shadow-xl">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-800 gap-3">
-          <div className="flex items-center gap-2">
-            <HelpCircle className="w-5 h-5 text-purple-400" />
-            <div>
-              <h2 className="text-base font-bold text-white">
-                Editar Preguntas y Respuestas ({questions.length})
-              </h2>
-              <p className="text-xs text-slate-400">
-                Hacé clic en &quot;Editar&quot; en cualquier pregunta para modificar el texto, las 4 opciones o la opción correcta.
-              </p>
-            </div>
+      {/* Questions Section */}
+      <div className="bg-slate-900/60 border border-slate-800 rounded-3xl p-6 shadow-xl mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4 mb-6">
+          <div>
+            <h2 className="text-lg font-bold text-white flex items-center gap-2">
+              <HelpCircle className="w-5 h-5 text-purple-400" />
+              <span>Preguntas de la Trivia ({questions.length})</span>
+            </h2>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Hacé click en &ldquo;Editar&rdquo; en cualquier tarjeta para cambiar la pregunta, las 4 opciones y la respuesta correcta.
+            </p>
           </div>
 
           <div className="flex items-center gap-2">
@@ -332,14 +415,14 @@ export default function AdminPage() {
                   type="button"
                   onClick={handleResetQuestions}
                   disabled={isResettingQuestions}
-                  className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs shadow-md transition-colors cursor-pointer"
+                  className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs shadow-lg transition-colors cursor-pointer"
                 >
-                  {isResettingQuestions ? "Restableciendo..." : "Confirmar Restablecer"}
+                  {isResettingQuestions ? "Restableciendo..." : "¿Confirmar restablecer?"}
                 </button>
                 <button
                   type="button"
                   onClick={() => setShowConfirmResetQuestions(false)}
-                  className="px-2.5 py-1.5 rounded-xl bg-slate-800 text-slate-300 font-bold text-xs cursor-pointer"
+                  className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs cursor-pointer"
                 >
                   Cancelar
                 </button>
@@ -348,34 +431,24 @@ export default function AdminPage() {
               <button
                 type="button"
                 onClick={() => setShowConfirmResetQuestions(true)}
-                className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
-                title="Restablecer preguntas predeterminadas"
+                className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
               >
                 <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
-                <span>Restablecer Predeterminadas</span>
+                <span>Restablecer plantilla inicial</span>
               </button>
             )}
-
-            <button
-              onClick={fetchAdminData}
-              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors cursor-pointer"
-              title="Recargar preguntas"
-            >
-              <RotateCw className="w-4 h-4" />
-            </button>
           </div>
         </div>
 
-        {/* Global Success / Error Banners for Questions */}
+        {/* Success message banner */}
         {questionSuccessMessage && (
-          <div className="my-4 p-3 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold flex items-center gap-2 animate-fadeIn">
-            <CheckCircle2 className="w-4 h-4 shrink-0" />
-            <span>{questionSuccessMessage}</span>
+          <div className="p-3 mb-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs text-center font-bold animate-fadeIn">
+            ✓ {questionSuccessMessage}
           </div>
         )}
 
-        {/* Question Cards / Forms List */}
-        <div className="mt-6 space-y-4">
+        {/* Questions list */}
+        <div className="space-y-4">
           {questions.map((q) => {
             const isEditing = editingQuestionId === q.id;
 
@@ -384,32 +457,32 @@ export default function AdminPage() {
                 <form
                   key={q.id}
                   onSubmit={handleSaveQuestion}
-                  className="p-5 rounded-2xl bg-purple-950/30 border-2 border-purple-500/60 text-xs space-y-4 shadow-2xl animate-fadeIn"
+                  className="p-5 rounded-2xl bg-purple-950/30 border-2 border-purple-500/60 shadow-xl space-y-4 text-xs animate-fadeIn"
                 >
-                  <div className="flex items-center justify-between pb-2 border-b border-purple-500/30">
-                    <span className="font-extrabold text-sm text-purple-300 flex items-center gap-1.5">
-                      <Edit3 className="w-4 h-4" />
-                      Editando Pregunta #{q.orderNum}
+                  <div className="flex items-center justify-between border-b border-purple-500/20 pb-3">
+                    <span className="font-extrabold text-sm text-purple-300 flex items-center gap-2">
+                      <Edit3 className="w-4 h-4 text-purple-400" />
+                      <span>Editando Pregunta #{q.orderNum}</span>
                     </span>
                     <button
                       type="button"
                       onClick={handleCancelEdit}
-                      className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                      className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 cursor-pointer"
                     >
                       <X className="w-4 h-4" />
                     </button>
                   </div>
 
                   {questionErrorMessage && (
-                    <div className="p-3 rounded-xl bg-rose-500/20 border border-rose-500/40 text-rose-300 text-xs font-semibold">
+                    <div className="p-2 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs font-medium animate-shake">
                       {questionErrorMessage}
                     </div>
                   )}
 
-                  {/* Question Text Input */}
+                  {/* Question Prompt */}
                   <div>
                     <label className="block font-bold text-slate-200 mb-1">
-                      Enunciado de la Pregunta
+                      Enunciado de la Pregunta:
                     </label>
                     <input
                       type="text"
@@ -418,85 +491,70 @@ export default function AdminPage() {
                       onChange={(e) =>
                         setEditDraft({ ...editDraft, question: e.target.value })
                       }
-                      placeholder="Ej: ¿Cuál es su comida favorita?"
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-purple-500/50 text-white font-semibold text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
                     />
                   </div>
 
-                  {/* 4 Options with Radio Selector */}
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="block font-bold text-slate-200">
-                        Opciones de Respuesta
-                      </label>
-                      <span className="text-[11px] text-amber-300 font-semibold">
-                        💡 Hacé clic en &quot;Marcar Correcta&quot; para definir la respuesta ganadora
-                      </span>
-                    </div>
+                  {/* 4 Options */}
+                  <div className="space-y-2">
+                    <label className="block font-bold text-slate-200">
+                      Opciones de Respuesta (marcá el botón verde para la correcta):
+                    </label>
 
-                    <div className="space-y-2.5">
-                      {editDraft.options.map((optText, oIdx) => {
-                        const isCorrect = editDraft.correctIndex === oIdx;
-                        const letter = OPTION_LETTERS[oIdx] || `${oIdx + 1}`;
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      {editDraft.options.map((opt, optIdx) => {
+                        const letter = OPTION_LETTERS[optIdx] || `${optIdx + 1}`;
+                        const isCorrect = editDraft.correctIndex === optIdx;
 
                         return (
                           <div
-                            key={oIdx}
-                            className={`p-2.5 rounded-xl border transition-all flex flex-col sm:flex-row sm:items-center gap-2 ${isCorrect
-                                ? "bg-emerald-950/40 border-emerald-500/60 ring-1 ring-emerald-500/40"
-                                : "bg-slate-900/60 border-slate-800"
-                              }`}
+                            key={optIdx}
+                            className={`p-2.5 rounded-xl border flex items-center gap-2 transition-all ${
+                              isCorrect
+                                ? "bg-emerald-950/40 border-emerald-500 shadow-md shadow-emerald-500/10"
+                                : "bg-slate-950 border-slate-700"
+                            }`}
                           >
-                            <div className="flex items-center gap-2 shrink-0">
-                              <span
-                                className={`w-7 h-7 rounded-lg font-black text-xs flex items-center justify-center ${isCorrect
-                                    ? "bg-emerald-500 text-slate-950"
-                                    : "bg-slate-800 text-slate-300"
-                                  }`}
-                              >
-                                {letter}
-                              </span>
-
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setEditDraft({ ...editDraft, correctIndex: oIdx })
-                                }
-                                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${isCorrect
-                                    ? "bg-emerald-500/30 text-emerald-300 border border-emerald-500/60 shadow-sm"
-                                    : "bg-slate-800 text-slate-400 hover:text-white border border-slate-700"
-                                  }`}
-                              >
-                                {isCorrect ? (
-                                  <>
-                                    <Check className="w-3.5 h-3.5 text-emerald-400" />
-                                    <span>Correcta ⭐</span>
-                                  </>
-                                ) : (
-                                  <span>Marcar Correcta</span>
-                                )}
-                              </button>
-                            </div>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setEditDraft({ ...editDraft, correctIndex: optIdx })
+                              }
+                              className={`w-7 h-7 rounded-lg font-black text-xs flex items-center justify-center shrink-0 cursor-pointer transition-colors ${
+                                isCorrect
+                                  ? "bg-emerald-500 text-slate-950"
+                                  : "bg-slate-800 text-slate-400 hover:bg-slate-700"
+                              }`}
+                              title={isCorrect ? "Respuesta Correcta" : "Marcar como Correcta"}
+                            >
+                              {letter}
+                            </button>
 
                             <input
                               type="text"
                               required
-                              value={optText}
+                              value={opt}
                               onChange={(e) => {
                                 const newOpts = [...editDraft.options];
-                                newOpts[oIdx] = e.target.value;
+                                newOpts[optIdx] = e.target.value;
                                 setEditDraft({ ...editDraft, options: newOpts });
                               }}
                               placeholder={`Opción ${letter}`}
-                              className="flex-1 px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-white text-xs focus:outline-none focus:ring-2 focus:ring-purple-500"
+                              className="w-full bg-transparent text-white text-xs focus:outline-none"
                             />
+
+                            {isCorrect && (
+                              <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full font-bold shrink-0">
+                                CORRECTA ⭐
+                              </span>
+                            )}
                           </div>
                         );
                       })}
                     </div>
                   </div>
 
-                  {/* Explanation Input */}
+                  {/* Explanation */}
                   <div>
                     <label className="block font-bold text-slate-200 mb-1">
                       Curiosidad / Explicación divertida (se muestra tras responder)
@@ -567,17 +625,19 @@ export default function AdminPage() {
                     return (
                       <div
                         key={oIdx}
-                        className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 ${isCorrect
+                        className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 ${
+                          isCorrect
                             ? "bg-emerald-950/40 border-emerald-500/40 text-emerald-200 font-bold"
                             : "bg-slate-900/40 border-slate-800 text-slate-300"
-                          }`}
+                        }`}
                       >
                         <div className="flex items-center gap-2 truncate">
                           <span
-                            className={`w-5 h-5 rounded font-black text-[10px] flex items-center justify-center shrink-0 ${isCorrect
+                            className={`w-5 h-5 rounded font-black text-[10px] flex items-center justify-center shrink-0 ${
+                              isCorrect
                                 ? "bg-emerald-500 text-slate-950"
                                 : "bg-slate-800 text-slate-400"
-                              }`}
+                            }`}
                           >
                             {letter}
                           </span>
@@ -605,7 +665,7 @@ export default function AdminPage() {
       </div>
 
       {/* Danger Zone: Reset test scores */}
-      <div className="mt-8 bg-rose-950/20 border border-rose-500/30 rounded-3xl p-6 shadow-xl mb-12">
+      <div className="bg-rose-950/20 border border-rose-500/30 rounded-3xl p-6 shadow-xl mb-12">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h2 className="text-base font-bold text-rose-300 flex items-center gap-2">
@@ -650,5 +710,19 @@ export default function AdminPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function AdminPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center text-slate-400 text-sm">
+          Cargando panel de administración...
+        </div>
+      }
+    >
+      <AdminContent />
+    </Suspense>
   );
 }

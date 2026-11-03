@@ -11,8 +11,8 @@ export async function POST(request: Request) {
       );
     }
 
-    await resetGame();
-    return NextResponse.json({ success: true, message: "Todas las partidas fueron reiniciadas" });
+    await resetGame(body.eventId);
+    return NextResponse.json({ success: true, message: "Todas las partidas del evento fueron reiniciadas" });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Error al reiniciar partidas";
     return NextResponse.json({ error: message }, { status: 500 });

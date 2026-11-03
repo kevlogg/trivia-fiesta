@@ -1,18 +1,37 @@
 import { NextResponse } from "next/server";
-import { getLeaderboard, getSettings } from "@/lib/trivia-service";
+import { getLeaderboard, getActiveEvent, getEventById } from "@/lib/trivia-service";
 
-export async function GET() {
+export const dynamic = "force-dynamic";
+
+export async function GET(request: Request) {
   try {
-    const leaderboard = await getLeaderboard();
-    const settings = await getSettings();
+    const { searchParams } = new URL(request.url);
+    const eventIdParam = searchParams.get("eventId");
 
+    let event = null;
+    if (eventIdParam) {
+      event = await getEventById(eventIdParam);
+    } else {
+      event = await getActiveEvent();
+    }
+
+    if (!event) {
+      return NextResponse.json({
+        hasActiveEvent: false,
+        leaderboard: [],
+        stats: { totalPlayers: 0, finishedCount: 0, topScore: 0 },
+      });
+    }
+
+    const leaderboard = await getLeaderboard(event.id);
     const finishedPlayers = leaderboard.filter((p) => p.isFinished);
     const totalPlayers = leaderboard.length;
     const topScore = finishedPlayers.length > 0 ? finishedPlayers[0].score : 0;
 
     return NextResponse.json({
+      hasActiveEvent: true,
+      event,
       leaderboard,
-      settings,
       stats: {
         totalPlayers,
         finishedCount: finishedPlayers.length,

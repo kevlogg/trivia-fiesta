@@ -1,5 +1,21 @@
+export type EventStatus = "active" | "inactive" | "finished";
+
+export interface TriviaEvent {
+  id: string;
+  slug: string;
+  title: string;
+  birthdayPerson: string;
+  timerSeconds: number;
+  status: EventStatus;
+  createdAt: string;
+  updatedAt: string;
+  playersCount?: number;
+  questionsCount?: number;
+}
+
 export interface Player {
   id: string;
+  eventId?: string;
   firstName: string;
   lastName: string;
   avatar: string;
@@ -12,6 +28,7 @@ export interface Player {
 
 export interface QuestionClient {
   id: number;
+  eventId?: string;
   orderNum: number;
   question: string;
   options: string[];
@@ -70,4 +87,3 @@ export interface TriviaSettings {
   eventTitle: string;
   questionTimerSeconds: number;
 }
-
