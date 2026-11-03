@@ -257,14 +257,14 @@ export default function TriviaGameScreen({
   const timerColorClass = isUrgent
     ? "text-rose-400 bg-rose-500/20 border-rose-500 animate-pulse"
     : isWarning
-    ? "text-amber-400 bg-amber-500/10 border-amber-500"
-    : "text-emerald-400 bg-emerald-500/10 border-emerald-500";
+      ? "text-amber-400 bg-amber-500/10 border-amber-500"
+      : "text-emerald-400 bg-emerald-500/10 border-emerald-500";
 
   const barColorClass = isUrgent
     ? "bg-gradient-to-r from-rose-500 to-red-600 shadow-lg shadow-rose-500/50"
     : isWarning
-    ? "bg-gradient-to-r from-amber-400 to-orange-500"
-    : "bg-gradient-to-r from-emerald-400 to-teal-500";
+      ? "bg-gradient-to-r from-amber-400 to-orange-500"
+      : "bg-gradient-to-r from-emerald-400 to-teal-500";
 
   return (
     <div className="w-full max-w-md mx-auto px-3.5 py-3 h-[100dvh] max-h-[100dvh] overflow-hidden flex flex-col justify-between select-none">
@@ -383,15 +383,14 @@ export default function TriviaGameScreen({
                   className={`w-full py-2.5 px-3 rounded-xl border text-left transition-all duration-100 flex items-center gap-2.5 cursor-pointer disabled:cursor-not-allowed ${btnStyle}`}
                 >
                   <span
-                    className={`w-7 h-7 rounded-lg font-black text-xs flex items-center justify-center shrink-0 transition-colors ${
-                      hasResult && isThisCorrect
+                    className={`w-7 h-7 rounded-lg font-black text-xs flex items-center justify-center shrink-0 transition-colors ${hasResult && isThisCorrect
                         ? "bg-emerald-500 text-slate-950 font-black"
                         : hasResult && isThisWrongSelected
-                        ? "bg-rose-500 text-white"
-                        : isSelected && !hasResult
-                        ? "bg-purple-500 text-white font-bold"
-                        : "bg-slate-700/80 text-slate-300"
-                    }`}
+                          ? "bg-rose-500 text-white"
+                          : isSelected && !hasResult
+                            ? "bg-purple-500 text-white font-bold"
+                            : "bg-slate-700/80 text-slate-300"
+                      }`}
                   >
                     {letter}
                   </span>

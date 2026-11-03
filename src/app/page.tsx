@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import RegistrationScreen from "@/components/RegistrationScreen";
 import TriviaGameScreen from "@/components/TriviaGameScreen";
 import ResultsLeaderboardScreen from "@/components/ResultsLeaderboardScreen";
@@ -9,7 +10,10 @@ import { Sparkles, Radio, PartyPopper, RefreshCw } from "lucide-react";
 
 type GamePhase = "LOADING" | "NO_EVENT" | "REGISTRATION" | "PLAYING" | "RESULTS";
 
-export default function HomePage() {
+function HomeContent() {
+  const searchParams = useSearchParams();
+  const eventIdParam = searchParams.get("eventId") || searchParams.get("e");
+
   const [phase, setPhase] = useState<GamePhase>("LOADING");
   const [activeEvent, setActiveEvent] = useState<TriviaEvent | null>(null);
   const [player, setPlayer] = useState<Player | null>(null);
@@ -23,16 +27,20 @@ export default function HomePage() {
 
   const pollTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Load active event, questions, settings, and player session
+  // Load event, questions, settings, and player session
   const initApp = useCallback(async () => {
     try {
-      const res = await fetch("/api/questions");
+      const qUrl = eventIdParam
+        ? `/api/questions?eventId=${encodeURIComponent(eventIdParam)}`
+        : "/api/questions";
+
+      const res = await fetch(qUrl);
       if (!res.ok) {
         throw new Error("No se pudieron cargar las preguntas");
       }
       const data = await res.json();
 
-      // Check if there is an active event
+      // Check if event exists and is active
       if (!data.hasActiveEvent || !data.event) {
         setPhase("NO_EVENT");
         setActiveEvent(null);
@@ -41,6 +49,12 @@ export default function HomePage() {
 
       const currentEvent: TriviaEvent = data.event;
       setActiveEvent(currentEvent);
+
+      // If the event itself is inactive
+      if (currentEvent.status === "inactive") {
+        setPhase("NO_EVENT");
+        return;
+      }
 
       const qList: QuestionClient[] = data.questions || [];
       setQuestions(qList);
@@ -63,7 +77,7 @@ export default function HomePage() {
             const playerData = await playerRes.json();
             const p: Player = playerData.player;
 
-            // Check that the player belongs to the CURRENT active event
+            // Check that the player belongs to this exact event
             if (p && p.eventId === currentEvent.id) {
               setPlayer(p);
               const answers: { questionId: number }[] = playerData.answers || [];
@@ -103,23 +117,29 @@ export default function HomePage() {
       console.error("Initialization error:", err);
       setPhase("NO_EVENT");
     }
-  }, []);
+  }, [eventIdParam]);
 
   useEffect(() => {
     initApp();
   }, [initApp]);
 
-  // Polling when in NO_EVENT mode: auto-detects when SuperAdmin activates an event
+  // Polling when in NO_EVENT mode: auto-detects when event is activated
   useEffect(() => {
     if (phase === "NO_EVENT") {
       pollTimerRef.current = setInterval(async () => {
         try {
-          const res = await fetch("/api/active-event");
+          const checkUrl = eventIdParam
+            ? `/api/questions?eventId=${encodeURIComponent(eventIdParam)}`
+            : "/api/active-event";
+
+          const res = await fetch(checkUrl);
           if (res.ok) {
             const data = await res.json();
-            if (data.hasActiveEvent && data.activeEvent) {
-              // An event was activated! Initialize game
-              initApp();
+            if (data.hasActiveEvent && (data.event || data.activeEvent)) {
+              const evt = data.event || data.activeEvent;
+              if (evt.status === "active") {
+                initApp();
+              }
             }
           }
         } catch {
@@ -134,7 +154,7 @@ export default function HomePage() {
         }
       };
     }
-  }, [phase, initApp]);
+  }, [phase, eventIdParam, initApp]);
 
   // When player completes registration
   const handleRegistered = (newPlayer: Player) => {
@@ -175,7 +195,7 @@ export default function HomePage() {
     );
   }
 
-  // WAITING SCREEN: When no event is currently active
+  // WAITING SCREEN: When no event is currently active or event is paused
   if (phase === "NO_EVENT") {
     return (
       <div className="h-[100dvh] max-h-[100dvh] overflow-hidden flex flex-col justify-between p-4 max-w-md mx-auto text-center select-none">
@@ -197,12 +217,14 @@ export default function HomePage() {
           </div>
 
           <h1 className="text-2xl font-black bg-gradient-to-r from-pink-400 via-purple-300 to-amber-300 bg-clip-text text-transparent mb-2">
-            ¡Todo Listo para la Fiesta!
+            {activeEvent ? activeEvent.title : "¡Todo Listo para la Fiesta!"}
           </h1>
 
           <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl backdrop-blur-md space-y-2 mb-3">
             <p className="text-sm text-slate-300 font-medium leading-relaxed">
-              Actualmente no hay ninguna trivia en curso.
+              {activeEvent
+                ? `La trivia de ${activeEvent.birthdayPerson} todavía no ha comenzado.`
+                : "Actualmente no hay ninguna trivia en curso."}
             </p>
             <p className="text-xs text-slate-400 leading-relaxed">
               Mantené esta pantalla abierta en tu celular. En cuanto el anfitrión dé inicio al juego desde la pantalla central, la trivia comenzará automáticamente acá sin necesidad de recargar.
@@ -235,6 +257,7 @@ export default function HomePage() {
       <RegistrationScreen
         eventTitle={settings.eventTitle}
         birthdayPerson={settings.birthdayPerson}
+        eventId={activeEvent?.id}
         onRegistered={handleRegistered}
       />
     );
@@ -262,4 +285,18 @@ export default function HomePage() {
   }
 
   return null;
+}
+
+export default function HomePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="h-[100dvh] flex items-center justify-center text-slate-400 text-sm">
+          Cargando trivia...
+        </div>
+      }
+    >
+      <HomeContent />
+    </Suspense>
+  );
 }

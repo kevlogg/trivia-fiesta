@@ -63,13 +63,13 @@ export async function getAllEvents(): Promise<TriviaEvent[]> {
   }));
 }
 
-export async function getEventById(id: string): Promise<TriviaEvent | null> {
+export async function getEventById(idOrSlug: string): Promise<TriviaEvent | null> {
   await ensureSchema();
   const client = getDatabase();
 
   const res = await client.execute({
-    sql: "SELECT * FROM events WHERE id = ?",
-    args: [id],
+    sql: "SELECT * FROM events WHERE id = ? OR slug = ?",
+    args: [idOrSlug, idOrSlug],
   });
   const row = res.rows[0];
   if (!row) return null;

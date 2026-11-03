@@ -40,8 +40,12 @@ export default function ResultsLeaderboardScreen({
   // Fetch updated leaderboard & player details
   const fetchLeaderboard = useCallback(async () => {
     try {
+      const lbUrl = player.eventId
+        ? `/api/leaderboard?eventId=${encodeURIComponent(player.eventId)}`
+        : "/api/leaderboard";
+
       const [lbRes, plRes] = await Promise.all([
-        fetch("/api/leaderboard"),
+        fetch(lbUrl),
         fetch(`/api/players/${player.id}`),
       ]);
 

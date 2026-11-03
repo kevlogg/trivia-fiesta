@@ -1,12 +1,16 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, Suspense } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { LeaderboardEntry, TriviaSettings, TriviaEvent } from "@/types/trivia";
 import { Trophy, Crown, Sparkles, Users, RotateCw, QrCode, Radio, Clock, ShieldCheck } from "lucide-react";
 
-export default function TvScreenPage() {
+function TvContent() {
+  const searchParams = useSearchParams();
+  const eventIdParam = searchParams.get("eventId") || searchParams.get("e");
+
   const [hasActiveEvent, setHasActiveEvent] = useState<boolean | null>(null);
   const [activeEvent, setActiveEvent] = useState<TriviaEvent | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
@@ -21,7 +25,11 @@ export default function TvScreenPage() {
 
   const fetchTvData = useCallback(async () => {
     try {
-      const res = await fetch("/api/leaderboard");
+      const qUrl = eventIdParam
+        ? `/api/leaderboard?eventId=${encodeURIComponent(eventIdParam)}`
+        : "/api/leaderboard";
+
+      const res = await fetch(qUrl);
       if (res.ok) {
         const data = await res.json();
         if (data.hasActiveEvent && data.event) {
@@ -43,7 +51,7 @@ export default function TvScreenPage() {
     } catch (err) {
       console.error("TV data fetch error:", err);
     }
-  }, []);
+  }, [eventIdParam]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -62,7 +70,7 @@ export default function TvScreenPage() {
 
   const formatSec = (ms: number) => (ms / 1000).toFixed(2);
 
-  // 1. TV WAITING SCREEN: When no event is currently active
+  // 1. TV WAITING SCREEN: When no event is active
   if (hasActiveEvent === false) {
     return (
       <div className="min-h-screen bg-slate-950 text-white p-6 md:p-12 flex flex-col justify-between select-none relative overflow-hidden">
@@ -140,6 +148,9 @@ export default function TvScreenPage() {
     );
   }
 
+  // Target QR URL: explicitly encodes the event ID so this QR is 100% unique to this event!
+  const qrEventUrl = activeEvent ? `${currentUrl}/?eventId=${activeEvent.id}` : currentUrl;
+
   // 2. TV ACTIVE EVENT SCREEN: QR Code + Live Leaderboard & Podium
   return (
     <div className="min-h-screen bg-slate-950 text-white p-6 md:p-10 flex flex-col justify-between select-none">
@@ -181,11 +192,11 @@ export default function TvScreenPage() {
             <QrCode className="w-4 h-4" /> ¡ESCANEÁ PARA JUGAR!
           </span>
 
-          {/* Dynamic QR Code */}
+          {/* Dynamic QR Code for this specific event */}
           <div className="p-4 bg-white rounded-3xl shadow-2xl mb-4 border-4 border-purple-500/40 transform hover:scale-105 transition-all">
             {currentUrl && (
               <Image
-                src={`/api/qr?url=${encodeURIComponent(currentUrl)}`}
+                src={`/api/qr?url=${encodeURIComponent(qrEventUrl)}`}
                 alt="QR Code Trivia"
                 width={220}
                 height={220}
@@ -196,7 +207,7 @@ export default function TvScreenPage() {
           </div>
 
           <p className="font-mono text-xs text-purple-300 font-bold bg-purple-950/50 px-3 py-1.5 rounded-xl border border-purple-500/20 mb-3 break-all">
-            {currentUrl}
+            {qrEventUrl}
           </p>
 
           <ol className="text-left text-xs text-slate-400 space-y-1.5 font-medium">
@@ -337,5 +348,19 @@ export default function TvScreenPage() {
         </span>
       </footer>
     </div>
+  );
+}
+
+export default function TvScreenPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400 text-sm">
+          Cargando pantalla de TV...
+        </div>
+      }
+    >
+      <TvContent />
+    </Suspense>
   );
 }

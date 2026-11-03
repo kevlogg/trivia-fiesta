@@ -72,3 +72,4 @@ testMultiEvents().catch((err) => {
   console.error("Error en pruebas multi-evento:", err);
   process.exit(1);
 });
+

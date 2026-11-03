@@ -8,6 +8,7 @@ import { Player } from "@/types/trivia";
 interface RegistrationScreenProps {
   eventTitle: string;
   birthdayPerson: string;
+  eventId?: string;
   onRegistered: (player: Player) => void;
 }
 
@@ -16,6 +17,7 @@ const AVATAR_OPTIONS = ["🥳", "🕺", "💃", "👑", "🚀", "🎸", "🍕", 
 export default function RegistrationScreen({
   eventTitle,
   birthdayPerson,
+  eventId,
   onRegistered,
 }: RegistrationScreenProps) {
   const [firstName, setFirstName] = useState("");
@@ -60,6 +62,7 @@ export default function RegistrationScreen({
           firstName: cleanFirst,
           lastName: cleanLast,
           avatar: selectedAvatar,
+          eventId,
         }),
       });
 
