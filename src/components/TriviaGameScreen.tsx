@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { QuestionClient, Player, SubmitAnswerResponse } from "@/types/trivia";
 import { sound } from "@/lib/sound";
 import { fireMiniConfetti } from "@/lib/confetti";
-import { CheckCircle2, XCircle, Clock, VolumeX, Music, Zap, Sparkles, ArrowRight } from "lucide-react";
+import { CheckCircle2, XCircle, Clock, VolumeX, Music, Zap, Sparkles } from "lucide-react";
 
 interface TriviaGameScreenProps {
   player: Player;
@@ -16,7 +16,7 @@ interface TriviaGameScreenProps {
 
 const TOTAL_QUESTION_TIME_SEC = 10;
 const OPTION_LETTERS = ["A", "B", "C", "D"];
-const AUTO_ADVANCE_DELAY_MS = 550; // Fast, snappy transition (0.55s)
+const FEEDBACK_DELAY_MS = 750; // Visible feedback for 0.75s before next question
 
 export default function TriviaGameScreen({
   player,
@@ -40,18 +40,23 @@ export default function TriviaGameScreen({
   const timerFrameRef = useRef<number | null>(null);
   const autoNextTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastTickSecondRef = useRef<number>(10);
+  const hasSubmittedRef = useRef<boolean>(false);
 
   const handleToggleSound = () => {
     const nextMuted = sound.toggleMute();
     setIsMuted(nextMuted);
   };
 
-  // Advance question or finish game
+  // Clean transition to next question or final podium
   const advanceToNext = useCallback(
     (isFinishedOverride?: boolean) => {
       if (autoNextTimeoutRef.current) {
         clearTimeout(autoNextTimeoutRef.current);
         autoNextTimeoutRef.current = null;
+      }
+      if (timerFrameRef.current) {
+        cancelAnimationFrame(timerFrameRef.current);
+        timerFrameRef.current = null;
       }
 
       const willFinish =
@@ -62,8 +67,10 @@ export default function TriviaGameScreen({
       if (willFinish) {
         onGameFinished();
       } else {
+        hasSubmittedRef.current = false;
         setSelectedOption(null);
         setIsAnswerSubmitted(false);
+        setIsSubmitting(false);
         setLastResult(null);
         setElapsedTimeDisplay(null);
         setCurrentIndex((prev) => prev + 1);
@@ -72,36 +79,44 @@ export default function TriviaGameScreen({
     [currentIndex, questions.length, onGameFinished]
   );
 
-  // Single-attempt option selection handler
+  // Core selection handler: ONLY called by clicking an option button OR strictly on 10s timeout
   const handleSelectOption = useCallback(
     async (optionIndex: number | null, forcedTimeMs?: number) => {
-      // Prevent any second click or duplicate call
-      if (isAnswerSubmitted || isSubmitting) return;
+      // Guard: only 1 answer can be registered per question
+      if (hasSubmittedRef.current || isAnswerSubmitted || isSubmitting) return;
 
-      // Haptic feedback on mobile if supported
-      if (typeof window !== "undefined" && "vibrate" in navigator) {
-        try {
-          navigator.vibrate(30);
-        } catch {
-          // ignore
-        }
-      }
+      hasSubmittedRef.current = true;
+      setIsAnswerSubmitted(true);
+      setIsSubmitting(true);
+      setSelectedOption(optionIndex);
 
-      // Freeze timer immediately
+      // Stop the 10s countdown timer immediately
       if (timerFrameRef.current) {
         cancelAnimationFrame(timerFrameRef.current);
         timerFrameRef.current = null;
       }
 
-      setIsAnswerSubmitted(true);
-      setIsSubmitting(true);
-      setSelectedOption(optionIndex);
-
-      // Measure exact time in milliseconds
-      const now = performance.now();
-      const elapsedRaw = forcedTimeMs !== undefined ? forcedTimeMs : now - startTimeRef.current;
-      const elapsedMs = Math.max(0, Math.min(TOTAL_QUESTION_TIME_SEC * 1000, Math.round(elapsedRaw)));
+      // Calculate exact response time in milliseconds
+      let elapsedMs: number;
+      if (optionIndex === null || forcedTimeMs !== undefined) {
+        // 10s Timeout: exactly 10,000 milliseconds
+        elapsedMs = TOTAL_QUESTION_TIME_SEC * 1000;
+      } else {
+        // User answered: exact wall-clock milliseconds spent
+        const now = performance.now();
+        const raw = now - startTimeRef.current;
+        elapsedMs = Math.max(50, Math.min(TOTAL_QUESTION_TIME_SEC * 1000, Math.round(raw)));
+      }
       setElapsedTimeDisplay(elapsedMs);
+
+      // Mobile haptic feedback if available
+      if (typeof window !== "undefined" && "vibrate" in navigator) {
+        try {
+          navigator.vibrate(optionIndex !== null ? 35 : 70);
+        } catch {
+          // ignore
+        }
+      }
 
       try {
         const res = await fetch("/api/answers/submit", {
@@ -118,14 +133,14 @@ export default function TriviaGameScreen({
         const data: SubmitAnswerResponse = await res.json();
 
         if (!res.ok) {
-          // If already answered, advance immediately
+          // If already registered, advance cleanly
           advanceToNext(currentIndex + 1 >= questions.length);
           return;
         }
 
         setLastResult(data);
 
-        // Immediate audio and visual feedback
+        // Sound & celebratory feedback
         if (data.isCorrect) {
           sound.playCorrect();
           fireMiniConfetti();
@@ -140,16 +155,15 @@ export default function TriviaGameScreen({
           onPlayerScoreUpdate(data.currentScore, data.totalTimeMs);
         }
 
-        // Automatic, smooth transition to next question in 550ms
+        // Advance to next question after feedback delay (0.75s)
         autoNextTimeoutRef.current = setTimeout(() => {
           advanceToNext(data.isFinished);
-        }, AUTO_ADVANCE_DELAY_MS);
+        }, FEEDBACK_DELAY_MS);
       } catch (err) {
         console.error("Error submitting answer:", err);
-        // Fallback auto advance
         autoNextTimeoutRef.current = setTimeout(() => {
           advanceToNext(currentIndex + 1 >= questions.length);
-        }, AUTO_ADVANCE_DELAY_MS);
+        }, FEEDBACK_DELAY_MS);
       } finally {
         setIsSubmitting(false);
       }
@@ -166,15 +180,17 @@ export default function TriviaGameScreen({
     ]
   );
 
-  // Keep a stable ref to handleSelectOption so useEffect depends ONLY on currentIndex
+  // Stable ref to avoid re-triggering the timer effect
   const handleSelectOptionRef = useRef(handleSelectOption);
   useEffect(() => {
     handleSelectOptionRef.current = handleSelectOption;
   });
 
-  // Countdown timer: strictly tied to currentIndex
+  // Strict 10-Second Timer: Runs ONCE per question (depends ONLY on currentIndex)
   useEffect(() => {
+    hasSubmittedRef.current = false;
     setIsAnswerSubmitted(false);
+    setIsSubmitting(false);
     setSelectedOption(null);
     setLastResult(null);
     setElapsedTimeDisplay(null);
@@ -184,12 +200,17 @@ export default function TriviaGameScreen({
     startTimeRef.current = performance.now();
 
     const tick = () => {
+      // If user has already submitted an answer, stop the loop completely
+      if (hasSubmittedRef.current) {
+        return;
+      }
+
       const now = performance.now();
       const elapsedSec = (now - startTimeRef.current) / 1000;
       const left = Math.max(0, TOTAL_QUESTION_TIME_SEC - elapsedSec);
       setRemainingTime(left);
 
-      // Sound warning ticks
+      // Warning audio ticks in last 3 seconds
       const currentCeilSec = Math.ceil(left);
       if (currentCeilSec < lastTickSecondRef.current && currentCeilSec > 0) {
         lastTickSecondRef.current = currentCeilSec;
@@ -200,8 +221,10 @@ export default function TriviaGameScreen({
         }
       }
 
+      // Check if exact 10.0 seconds have elapsed
       if (left <= 0) {
-        // Strict 10-second timeout: auto-submit as unanswered and pass
+        hasSubmittedRef.current = true;
+        // Strict 10-second timeout: marks incorrect and records 10,000ms
         handleSelectOptionRef.current(null, TOTAL_QUESTION_TIME_SEC * 1000);
       } else {
         timerFrameRef.current = requestAnimationFrame(tick);
@@ -213,12 +236,14 @@ export default function TriviaGameScreen({
     return () => {
       if (timerFrameRef.current) {
         cancelAnimationFrame(timerFrameRef.current);
+        timerFrameRef.current = null;
       }
       if (autoNextTimeoutRef.current) {
         clearTimeout(autoNextTimeoutRef.current);
+        autoNextTimeoutRef.current = null;
       }
     };
-  }, [currentIndex]); // Only depends on currentIndex! Never resets during option click
+  }, [currentIndex]); // Purely dependent on currentIndex!
 
   if (!currentQuestion) {
     return null;
@@ -242,7 +267,7 @@ export default function TriviaGameScreen({
     : "bg-gradient-to-r from-emerald-400 to-teal-500";
 
   return (
-    <div className="w-full max-w-md mx-auto px-4 py-5 flex flex-col min-h-screen justify-between select-none touch-manipulation">
+    <div className="w-full max-w-md mx-auto px-4 py-5 flex flex-col min-h-screen justify-between select-none">
       {/* Top Bar: Progress, Score & Sound */}
       <div>
         <div className="flex items-center justify-between mb-3 text-xs">
@@ -254,7 +279,7 @@ export default function TriviaGameScreen({
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Score Pill */}
+            {/* Current Score */}
             <div className="px-3 py-1 rounded-full bg-purple-950/80 border border-purple-500/40 text-purple-300 font-extrabold flex items-center gap-1 shadow-sm">
               <span>⭐</span>
               <span>{currentScore} pts</span>
@@ -286,7 +311,7 @@ export default function TriviaGameScreen({
           />
         </div>
 
-        {/* Strict 10s Timer Banner */}
+        {/* Strict 10s Timer Countdown Banner */}
         <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-3 shadow-xl mb-4">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-1.5 text-xs font-bold text-slate-300">
@@ -310,16 +335,8 @@ export default function TriviaGameScreen({
         </div>
       </div>
 
-      {/* Question Card */}
-      <div
-        className="flex-1 flex flex-col justify-center my-2 cursor-pointer"
-        onClick={() => {
-          // If result is showing, tapping anywhere advances immediately!
-          if (lastResult) {
-            advanceToNext(lastResult.isFinished);
-          }
-        }}
-      >
+      {/* Question Card: No onClick on the card container so background clicks do nothing */}
+      <div className="flex-1 flex flex-col justify-center my-2">
         <div className="bg-slate-900/90 backdrop-blur-md border border-slate-800 rounded-3xl p-5 shadow-2xl relative overflow-hidden">
           <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500" />
 
@@ -327,7 +344,7 @@ export default function TriviaGameScreen({
             {currentQuestion.question}
           </h2>
 
-          {/* Options Grid (locked with pointer-events-none as soon as an option is touched) */}
+          {/* Options Grid: Disabled immediately when an answer is chosen or time runs out */}
           <div className={`space-y-3 ${isAnswerSubmitted ? "pointer-events-none select-none" : ""}`}>
             {currentQuestion.options.map((option, idx) => {
               const letter = OPTION_LETTERS[idx] || `${idx + 1}`;
@@ -350,8 +367,8 @@ export default function TriviaGameScreen({
                   btnStyle = "bg-slate-800/30 border-slate-800/40 text-slate-500 opacity-40";
                 }
               } else if (isSelected) {
-                // Instant visual acknowledgment on click while request is in flight
-                btnStyle = "bg-purple-600/40 border-2 border-purple-400 text-white shadow-lg shadow-purple-500/30 scale-[1.01]";
+                btnStyle =
+                  "bg-purple-600/40 border-2 border-purple-400 text-white shadow-lg shadow-purple-500/30 scale-[1.01]";
               }
 
               return (
@@ -359,11 +376,8 @@ export default function TriviaGameScreen({
                   key={idx}
                   type="button"
                   disabled={isAnswerSubmitted}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleSelectOption(idx);
-                  }}
-                  className={`w-full p-3.5 rounded-2xl border text-left transition-all duration-100 flex items-center gap-3.5 cursor-pointer touch-manipulation disabled:cursor-not-allowed ${btnStyle}`}
+                  onClick={() => handleSelectOption(idx)}
+                  className={`w-full p-3.5 rounded-2xl border text-left transition-all duration-100 flex items-center gap-3.5 cursor-pointer disabled:cursor-not-allowed ${btnStyle}`}
                 >
                   <span
                     className={`w-8 h-8 rounded-xl font-bold text-sm flex items-center justify-center shrink-0 transition-colors ${
@@ -383,7 +397,7 @@ export default function TriviaGameScreen({
                     {option}
                   </span>
 
-                  {/* Visual feedback icon */}
+                  {/* Feedback icons */}
                   {isSelected && !hasResult && (
                     <span className="w-4 h-4 border-2 border-purple-300 border-t-transparent rounded-full animate-spin shrink-0" />
                   )}
@@ -398,7 +412,7 @@ export default function TriviaGameScreen({
             })}
           </div>
 
-          {/* Instant Result Indicator & Auto-Transition Status */}
+          {/* Feedback & Result Banner */}
           {lastResult && (
             <div className="mt-4 pt-3 border-t border-slate-800 animate-fadeIn">
               <div className="flex items-center justify-between mb-2">
@@ -409,7 +423,7 @@ export default function TriviaGameScreen({
                     </span>
                   ) : selectedOption === null ? (
                     <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black bg-rose-500/20 text-rose-300 border border-rose-500/40">
-                      ⏱️ TIEMPO AGOTADO
+                      ⏱️ ¡TIEMPO AGOTADO! (10.0s)
                     </span>
                   ) : (
                     <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black bg-rose-500/20 text-rose-300 border border-rose-500/40">
@@ -426,13 +440,8 @@ export default function TriviaGameScreen({
                 )}
               </div>
 
-              {/* Fast auto-transition indicator */}
-              <div className="flex items-center justify-between text-[11px] text-purple-300 pt-1 font-semibold">
-                <span className="animate-pulse">Avanzando automáticamente...</span>
-                <span className="text-[10px] text-slate-400 flex items-center gap-1">
-                  <span>Tocá para avanzar ya</span>
-                  <ArrowRight className="w-3 h-3" />
-                </span>
+              <div className="text-center text-[11px] text-purple-300 pt-1 font-semibold animate-pulse">
+                Pasando a la siguiente pregunta...
               </div>
             </div>
           )}
@@ -441,7 +450,7 @@ export default function TriviaGameScreen({
 
       {/* Bottom Hint */}
       <div className="text-center text-slate-500 text-xs py-1">
-        ⚡ Respuesta única • Avanza automáticamente con un solo toque
+        ⏱️ 10 segundos por pregunta • Se registra tu tiempo exacto
       </div>
     </div>
   );
