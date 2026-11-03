@@ -66,9 +66,26 @@ async function runTests() {
     });
   }
 
-  // 6. Verify answers audit
+  // 6. Verify single-attempt rule: attempting to re-answer must fail
+  let duplicatePrevented = false;
+  try {
+    await submitAnswer({
+      playerId: camila.id,
+      questionId: questions[0].id,
+      selectedIndex: 2,
+      timeSpentMs: 2000,
+    });
+  } catch (err) {
+    duplicatePrevented = true;
+  }
+  if (!duplicatePrevented) {
+    throw new Error("ERROR: Se permitió responder una pregunta más de una vez");
+  }
+  console.log("✓ 6. Regla de respuesta única: reintento bloqueado exitosamente.");
+
+  // 7. Verify answers audit
   const camilaAnswers = await getPlayerAnswers(camila.id);
-  console.log(`✓ 6. Auditoría: Camila tiene ${camilaAnswers.length} respuestas registradas en la BD.`);
+  console.log(`✓ 7. Auditoría: Camila tiene ${camilaAnswers.length} respuestas registradas en la BD.`);
 
   // 7. Check Leaderboard and Tie-Breaker
   const leaderboard = await getLeaderboard();

@@ -13,6 +13,7 @@ export default function HomePage() {
   const [phase, setPhase] = useState<GamePhase>("LOADING");
   const [player, setPlayer] = useState<Player | null>(null);
   const [questions, setQuestions] = useState<QuestionClient[]>([]);
+  const [initialQuestionIndex, setInitialQuestionIndex] = useState<number>(0);
   const [settings, setSettings] = useState<TriviaSettings>({
     birthdayPerson: "el Cumpleañero",
     eventTitle: "🎉 Trivia de Cumpleaños",
@@ -27,26 +28,44 @@ export default function HomePage() {
         throw new Error("No se pudieron cargar las preguntas");
       }
       const data = await res.json();
-      setQuestions(data.questions || []);
+      const qList: QuestionClient[] = data.questions || [];
+      setQuestions(qList);
       if (data.settings) {
         setSettings(data.settings);
       }
 
       // Check if player has an existing session in localStorage
-      const savedPlayerId = typeof window !== "undefined" ? localStorage.getItem("trivia_current_player_id") : null;
+      const savedPlayerId =
+        typeof window !== "undefined"
+          ? localStorage.getItem("trivia_current_player_id")
+          : null;
+
       if (savedPlayerId) {
         const playerRes = await fetch(`/api/players/${savedPlayerId}`);
         if (playerRes.ok) {
           const playerData = await playerRes.json();
           if (playerData.player) {
             setPlayer(playerData.player);
-            if (playerData.player.isFinished) {
+            const answers: { questionId: number }[] = playerData.answers || [];
+
+            // If player finished or answered all questions -> jump directly to RESULTS
+            if (playerData.player.isFinished || answers.length >= qList.length) {
               setPhase("RESULTS");
               return;
-            } else {
-              setPhase("PLAYING");
+            }
+
+            // Find the index of the first question not yet answered
+            const answeredIds = new Set(answers.map((a) => a.questionId));
+            const nextIdx = qList.findIndex((q) => !answeredIds.has(q.id));
+
+            if (nextIdx === -1) {
+              setPhase("RESULTS");
               return;
             }
+
+            setInitialQuestionIndex(nextIdx);
+            setPhase("PLAYING");
+            return;
           }
         }
       }
@@ -65,6 +84,7 @@ export default function HomePage() {
   // When player completes registration
   const handleRegistered = (newPlayer: Player) => {
     setPlayer(newPlayer);
+    setInitialQuestionIndex(0);
     setPhase("PLAYING");
   };
 
@@ -84,6 +104,7 @@ export default function HomePage() {
       localStorage.removeItem("trivia_current_player_id");
     }
     setPlayer(null);
+    setInitialQuestionIndex(0);
     setPhase("REGISTRATION");
   };
 
@@ -114,6 +135,7 @@ export default function HomePage() {
       <TriviaGameScreen
         player={player}
         questions={questions}
+        initialQuestionIndex={initialQuestionIndex}
         onGameFinished={handleGameFinished}
         onPlayerScoreUpdate={handlePlayerScoreUpdate}
       />

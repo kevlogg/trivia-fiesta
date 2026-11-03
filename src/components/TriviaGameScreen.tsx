@@ -4,11 +4,12 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { QuestionClient, Player, SubmitAnswerResponse } from "@/types/trivia";
 import { sound } from "@/lib/sound";
 import { fireMiniConfetti } from "@/lib/confetti";
-import { CheckCircle2, XCircle, Clock, VolumeX, Music, Zap, ArrowRight } from "lucide-react";
+import { CheckCircle2, XCircle, Clock, VolumeX, Music, Zap, Sparkles } from "lucide-react";
 
 interface TriviaGameScreenProps {
   player: Player;
   questions: QuestionClient[];
+  initialQuestionIndex?: number;
   onGameFinished: () => void;
   onPlayerScoreUpdate?: (newScore: number, totalTimeMs: number) => void;
 }
@@ -19,10 +20,11 @@ const OPTION_LETTERS = ["A", "B", "C", "D"];
 export default function TriviaGameScreen({
   player,
   questions,
+  initialQuestionIndex = 0,
   onGameFinished,
   onPlayerScoreUpdate,
 }: TriviaGameScreenProps) {
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [currentIndex, setCurrentIndex] = useState(initialQuestionIndex);
   const [remainingTime, setRemainingTime] = useState<number>(TOTAL_QUESTION_TIME_SEC);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
   const [isAnswerSubmitted, setIsAnswerSubmitted] = useState<boolean>(false);
@@ -43,12 +45,39 @@ export default function TriviaGameScreen({
     setIsMuted(nextMuted);
   };
 
-  // Main selection handler
+  // Advance question or finish game
+  const advanceToNext = useCallback(
+    (isFinishedOverride?: boolean) => {
+      if (autoNextTimeoutRef.current) {
+        clearTimeout(autoNextTimeoutRef.current);
+        autoNextTimeoutRef.current = null;
+      }
+
+      const willFinish =
+        isFinishedOverride !== undefined
+          ? isFinishedOverride
+          : currentIndex + 1 >= questions.length;
+
+      if (willFinish) {
+        onGameFinished();
+      } else {
+        setSelectedOption(null);
+        setIsAnswerSubmitted(false);
+        setLastResult(null);
+        setElapsedTimeDisplay(null);
+        setCurrentIndex((prev) => prev + 1);
+      }
+    },
+    [currentIndex, questions.length, onGameFinished]
+  );
+
+  // Single-attempt option selection handler
   const handleSelectOption = useCallback(
     async (optionIndex: number | null, forcedTimeMs?: number) => {
+      // Prevent any second click or duplicate call
       if (isAnswerSubmitted || isSubmitting) return;
 
-      // Immediately freeze timer
+      // Freeze timer immediately
       if (timerFrameRef.current) {
         cancelAnimationFrame(timerFrameRef.current);
         timerFrameRef.current = null;
@@ -58,7 +87,7 @@ export default function TriviaGameScreen({
       setIsSubmitting(true);
       setSelectedOption(optionIndex);
 
-      // Measure exact time
+      // Measure exact time in milliseconds
       const now = performance.now();
       const elapsedRaw = forcedTimeMs !== undefined ? forcedTimeMs : now - startTimeRef.current;
       const elapsedMs = Math.max(0, Math.min(TOTAL_QUESTION_TIME_SEC * 1000, Math.round(elapsedRaw)));
@@ -77,8 +106,16 @@ export default function TriviaGameScreen({
         });
 
         const data: SubmitAnswerResponse = await res.json();
+
+        if (!res.ok) {
+          // If already answered, advance immediately
+          advanceToNext(currentIndex + 1 >= questions.length);
+          return;
+        }
+
         setLastResult(data);
 
+        // Immediate audio and visual feedback
         if (data.isCorrect) {
           sound.playCorrect();
           fireMiniConfetti();
@@ -93,47 +130,33 @@ export default function TriviaGameScreen({
           onPlayerScoreUpdate(data.currentScore, data.totalTimeMs);
         }
 
-        // Auto advance after 1.4 seconds
+        // Automatic, smooth transition to next question (850ms to see result and keep pace)
         autoNextTimeoutRef.current = setTimeout(() => {
           advanceToNext(data.isFinished);
-        }, 1400);
+        }, 850);
       } catch (err) {
         console.error("Error submitting answer:", err);
-        // Fallback advance
+        // Fallback auto advance
         autoNextTimeoutRef.current = setTimeout(() => {
           advanceToNext(currentIndex + 1 >= questions.length);
-        }, 1400);
+        }, 850);
       } finally {
         setIsSubmitting(false);
       }
     },
-    [isAnswerSubmitted, isSubmitting, player.id, currentQuestion, currentIndex, questions.length, onPlayerScoreUpdate]
+    [
+      isAnswerSubmitted,
+      isSubmitting,
+      player.id,
+      currentQuestion,
+      currentIndex,
+      questions.length,
+      onPlayerScoreUpdate,
+      advanceToNext,
+    ]
   );
 
-  // Advance question or finish
-  const advanceToNext = useCallback(
-    (isFinishedOverride?: boolean) => {
-      if (autoNextTimeoutRef.current) {
-        clearTimeout(autoNextTimeoutRef.current);
-        autoNextTimeoutRef.current = null;
-      }
-
-      const willFinish = isFinishedOverride !== undefined ? isFinishedOverride : currentIndex + 1 >= questions.length;
-
-      if (willFinish) {
-        onGameFinished();
-      } else {
-        setSelectedOption(null);
-        setIsAnswerSubmitted(false);
-        setLastResult(null);
-        setElapsedTimeDisplay(null);
-        setCurrentIndex((prev) => prev + 1);
-      }
-    },
-    [currentIndex, questions.length, onGameFinished]
-  );
-
-  // Initialize and run high-resolution timer for each question
+  // Initialize and run high-resolution countdown for current question
   useEffect(() => {
     setIsAnswerSubmitted(false);
     setSelectedOption(null);
@@ -150,7 +173,7 @@ export default function TriviaGameScreen({
       const left = Math.max(0, TOTAL_QUESTION_TIME_SEC - elapsedSec);
       setRemainingTime(left);
 
-      // Sound ticks
+      // Sound warning ticks
       const currentCeilSec = Math.ceil(left);
       if (currentCeilSec < lastTickSecondRef.current && currentCeilSec > 0) {
         lastTickSecondRef.current = currentCeilSec;
@@ -162,7 +185,7 @@ export default function TriviaGameScreen({
       }
 
       if (left <= 0) {
-        // Strict 10-second timeout
+        // Strict 10-second timeout: auto-submit as unanswered and pass
         handleSelectOption(null, TOTAL_QUESTION_TIME_SEC * 1000);
       } else {
         timerFrameRef.current = requestAnimationFrame(tick);
@@ -181,7 +204,11 @@ export default function TriviaGameScreen({
     };
   }, [currentIndex, handleSelectOption]);
 
-  // Color dynamics for timer
+  if (!currentQuestion) {
+    return null;
+  }
+
+  // Timer Color Dynamics
   const timerPercentage = Math.max(0, Math.min(100, (remainingTime / TOTAL_QUESTION_TIME_SEC) * 100));
   const isUrgent = remainingTime <= 3.0;
   const isWarning = remainingTime <= 5.0 && !isUrgent;
@@ -199,7 +226,7 @@ export default function TriviaGameScreen({
     : "bg-gradient-to-r from-emerald-400 to-teal-500";
 
   return (
-    <div className="w-full max-w-md mx-auto px-4 py-5 flex flex-col min-h-screen justify-between">
+    <div className="w-full max-w-md mx-auto px-4 py-5 flex flex-col min-h-screen justify-between select-none">
       {/* Top Bar: Progress, Score & Sound */}
       <div>
         <div className="flex items-center justify-between mb-3 text-xs">
@@ -229,9 +256,11 @@ export default function TriviaGameScreen({
           </div>
         </div>
 
-        {/* Progress Bar of Questions */}
+        {/* Progress Bar */}
         <div className="flex items-center justify-between text-xs text-slate-400 mb-1.5 font-semibold">
-          <span>Pregunta {currentIndex + 1} de {questions.length}</span>
+          <span>
+            Pregunta {currentIndex + 1} de {questions.length}
+          </span>
           <span>{Math.round(((currentIndex + 1) / questions.length) * 100)}%</span>
         </div>
         <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden mb-4">
@@ -249,7 +278,6 @@ export default function TriviaGameScreen({
               <span>Tiempo Restante:</span>
             </div>
 
-            {/* Number with 1 decimal */}
             <div
               className={`px-3 py-0.5 rounded-lg border font-mono font-black text-sm tracking-wider transition-all ${timerColorClass}`}
             >
@@ -257,7 +285,6 @@ export default function TriviaGameScreen({
             </div>
           </div>
 
-          {/* Smooth dynamic bar */}
           <div className="w-full h-2.5 bg-slate-800/90 rounded-full overflow-hidden p-0.5">
             <div
               className={`h-full rounded-full transition-all duration-75 ${barColorClass}`}
@@ -270,15 +297,14 @@ export default function TriviaGameScreen({
       {/* Question Card */}
       <div className="flex-1 flex flex-col justify-center my-2">
         <div className="bg-slate-900/90 backdrop-blur-md border border-slate-800 rounded-3xl p-5 shadow-2xl relative overflow-hidden">
-          {/* Subtle party neon glow at the top */}
           <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500" />
 
           <h2 className="text-xl font-bold text-white leading-snug mb-5 pt-2 text-center">
             {currentQuestion.question}
           </h2>
 
-          {/* Options Grid */}
-          <div className="space-y-3">
+          {/* Options Grid (locked with pointer-events-none as soon as an option is touched) */}
+          <div className={`space-y-3 ${isAnswerSubmitted ? "pointer-events-none select-none" : ""}`}>
             {currentQuestion.options.map((option, idx) => {
               const letter = OPTION_LETTERS[idx] || `${idx + 1}`;
               const isSelected = selectedOption === idx;
@@ -286,18 +312,21 @@ export default function TriviaGameScreen({
               const isThisCorrect = hasResult && lastResult.correctIndex === idx;
               const isThisWrongSelected = hasResult && isSelected && !lastResult.isCorrect;
 
-              let btnStyle = "bg-slate-800/70 border-slate-700/80 text-slate-100 hover:bg-slate-800 hover:border-purple-500/50 active:scale-[0.98]";
+              let btnStyle =
+                "bg-slate-800/70 border-slate-700/80 text-slate-100 hover:bg-slate-800 hover:border-purple-500/50 active:scale-[0.98]";
 
               if (hasResult) {
                 if (isThisCorrect) {
-                  btnStyle = "bg-emerald-500/20 border-emerald-400 text-emerald-200 ring-2 ring-emerald-500/50 scale-[1.02] shadow-lg shadow-emerald-500/20";
+                  btnStyle =
+                    "bg-emerald-500/20 border-emerald-400 text-emerald-200 ring-2 ring-emerald-500/50 scale-[1.02] shadow-lg shadow-emerald-500/20";
                 } else if (isThisWrongSelected) {
-                  btnStyle = "bg-rose-500/20 border-rose-500 text-rose-200 ring-2 ring-rose-500/40 animate-shake";
+                  btnStyle =
+                    "bg-rose-500/20 border-rose-500 text-rose-200 ring-2 ring-rose-500/40 animate-shake";
                 } else {
-                  btnStyle = "bg-slate-800/30 border-slate-800/40 text-slate-500 opacity-60";
+                  btnStyle = "bg-slate-800/30 border-slate-800/40 text-slate-500 opacity-50";
                 }
               } else if (isSelected) {
-                btnStyle = "bg-purple-600/30 border-purple-400 text-white scale-[1.01]";
+                btnStyle = "bg-purple-600/40 border-purple-400 text-white scale-[1.01]";
               }
 
               return (
@@ -306,7 +335,7 @@ export default function TriviaGameScreen({
                   type="button"
                   disabled={isAnswerSubmitted}
                   onClick={() => handleSelectOption(idx)}
-                  className={`w-full p-3.5 rounded-2xl border text-left transition-all duration-200 flex items-center gap-3.5 cursor-pointer disabled:cursor-default ${btnStyle}`}
+                  className={`w-full p-3.5 rounded-2xl border text-left transition-all duration-150 flex items-center gap-3.5 cursor-pointer disabled:cursor-not-allowed ${btnStyle}`}
                 >
                   <span
                     className={`w-8 h-8 rounded-xl font-bold text-sm flex items-center justify-center shrink-0 transition-colors ${
@@ -335,22 +364,22 @@ export default function TriviaGameScreen({
             })}
           </div>
 
-          {/* Instant Feedback Card with Milliseconds */}
+          {/* Instant Result Indicator & Auto-Transition Status */}
           {lastResult && (
             <div className="mt-4 pt-3 border-t border-slate-800 animate-fadeIn">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-1.5">
                   {lastResult.isCorrect ? (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-                      🎯 ¡CORRECTO!
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 animate-bounce">
+                      <Sparkles className="w-3.5 h-3.5" /> ¡CORRECTO!
                     </span>
                   ) : selectedOption === null ? (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-rose-500/20 text-rose-300 border border-rose-500/40">
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black bg-rose-500/20 text-rose-300 border border-rose-500/40">
                       ⏱️ TIEMPO AGOTADO
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-rose-500/20 text-rose-300 border border-rose-500/40">
-                      ❌ ¡CASI!
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black bg-rose-500/20 text-rose-300 border border-rose-500/40">
+                      ❌ INCORRECTO
                     </span>
                   )}
                 </div>
@@ -363,22 +392,9 @@ export default function TriviaGameScreen({
                 )}
               </div>
 
-              {lastResult.explanation && (
-                <p className="text-xs text-slate-300 italic bg-slate-950/60 p-2.5 rounded-xl border border-slate-800">
-                  {lastResult.explanation}
-                </p>
-              )}
-
-              {/* Fast Forward Button */}
-              <div className="mt-3 flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => advanceToNext(lastResult.isFinished)}
-                  className="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs flex items-center gap-1 shadow-md transition-all cursor-pointer"
-                >
-                  <span>Siguiente</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
+              {/* Automatic Transitioning Notification */}
+              <div className="flex items-center justify-center gap-1.5 text-[11px] text-purple-300 pt-1 font-semibold animate-pulse">
+                <span>Pasando a la siguiente pregunta...</span>
               </div>
             </div>
           )}
@@ -387,9 +403,8 @@ export default function TriviaGameScreen({
 
       {/* Bottom Hint */}
       <div className="text-center text-slate-500 text-xs py-1">
-        ⚡ La velocidad desempata en el ranking final
+        ⚡ Respuesta única e inmediata • La velocidad desempata en el podio
       </div>
     </div>
   );
 }
-

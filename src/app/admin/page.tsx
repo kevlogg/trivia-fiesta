@@ -442,19 +442,17 @@ export default function AdminPage() {
                         return (
                           <div
                             key={oIdx}
-                            className={`p-2.5 rounded-xl border transition-all flex flex-col sm:flex-row sm:items-center gap-2 ${
-                              isCorrect
+                            className={`p-2.5 rounded-xl border transition-all flex flex-col sm:flex-row sm:items-center gap-2 ${isCorrect
                                 ? "bg-emerald-950/40 border-emerald-500/60 ring-1 ring-emerald-500/40"
                                 : "bg-slate-900/60 border-slate-800"
-                            }`}
+                              }`}
                           >
                             <div className="flex items-center gap-2 shrink-0">
                               <span
-                                className={`w-7 h-7 rounded-lg font-black text-xs flex items-center justify-center ${
-                                  isCorrect
+                                className={`w-7 h-7 rounded-lg font-black text-xs flex items-center justify-center ${isCorrect
                                     ? "bg-emerald-500 text-slate-950"
                                     : "bg-slate-800 text-slate-300"
-                                }`}
+                                  }`}
                               >
                                 {letter}
                               </span>
@@ -464,11 +462,10 @@ export default function AdminPage() {
                                 onClick={() =>
                                   setEditDraft({ ...editDraft, correctIndex: oIdx })
                                 }
-                                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
-                                  isCorrect
+                                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${isCorrect
                                     ? "bg-emerald-500/30 text-emerald-300 border border-emerald-500/60 shadow-sm"
                                     : "bg-slate-800 text-slate-400 hover:text-white border border-slate-700"
-                                }`}
+                                  }`}
                               >
                                 {isCorrect ? (
                                   <>
@@ -570,19 +567,17 @@ export default function AdminPage() {
                     return (
                       <div
                         key={oIdx}
-                        className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 ${
-                          isCorrect
+                        className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 ${isCorrect
                             ? "bg-emerald-950/40 border-emerald-500/40 text-emerald-200 font-bold"
                             : "bg-slate-900/40 border-slate-800 text-slate-300"
-                        }`}
+                          }`}
                       >
                         <div className="flex items-center gap-2 truncate">
                           <span
-                            className={`w-5 h-5 rounded font-black text-[10px] flex items-center justify-center shrink-0 ${
-                              isCorrect
+                            className={`w-5 h-5 rounded font-black text-[10px] flex items-center justify-center shrink-0 ${isCorrect
                                 ? "bg-emerald-500 text-slate-950"
                                 : "bg-slate-800 text-slate-400"
-                            }`}
+                              }`}
                           >
                             {letter}
                           </span>

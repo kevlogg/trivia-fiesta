@@ -188,15 +188,20 @@ export async function submitAnswer(payload: SubmitAnswerPayload): Promise<Submit
   const isCorrect = selectedIndex !== null && selectedIndex === correctIndex;
   const now = new Date().toISOString();
 
-  // Upsert answer
+  // Strict check: each question can only be answered once per player
+  const existingAnswer = await client.execute({
+    sql: "SELECT id FROM player_answers WHERE player_id = ? AND question_id = ?",
+    args: [playerId, questionId],
+  });
+  if (existingAnswer.rows.length > 0) {
+    throw new Error("Esta pregunta ya fue respondida y no puede volver a contestarse.");
+  }
+
+  // Insert answer (single attempt strictly enforced)
   await client.execute({
     sql: `
       INSERT INTO player_answers (player_id, question_id, selected_index, is_correct, time_spent_ms, created_at)
       VALUES (?, ?, ?, ?, ?, ?)
-      ON CONFLICT(player_id, question_id) DO UPDATE SET
-        selected_index = excluded.selected_index,
-        is_correct = excluded.is_correct,
-        time_spent_ms = excluded.time_spent_ms
     `,
     args: [playerId, questionId, selectedIndex, isCorrect ? 1 : 0, timeSpentMs, now],
   });
