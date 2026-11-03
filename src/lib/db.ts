@@ -120,7 +120,7 @@ export async function ensureSchema(): Promise<void> {
   global.__schemaInitialized = true;
 }
 
-async function seedQuestions(client: Client) {
+export async function seedQuestions(client: Client) {
   const defaultQuestions = [
     {
       order_num: 1,

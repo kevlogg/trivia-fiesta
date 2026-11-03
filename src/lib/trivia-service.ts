@@ -1,4 +1,4 @@
-import { getDatabase, ensureSchema } from "./db";
+import { getDatabase, ensureSchema, seedQuestions } from "./db";
 import {
   Player,
   QuestionClient,
@@ -100,6 +100,64 @@ export async function getAllQuestionsAdmin(): Promise<QuestionAdmin[]> {
     correctIndex: Number(r.correct_index),
     explanation: String(r.explanation),
   }));
+}
+
+export async function updateQuestion(
+  id: number,
+  data: {
+    question: string;
+    options: string[];
+    correctIndex: number;
+    explanation: string;
+  }
+): Promise<QuestionAdmin> {
+  await ensureSchema();
+  const client = getDatabase();
+
+  const cleanQ = data.question.trim();
+  if (!cleanQ) {
+    throw new Error("La pregunta no puede estar vacía");
+  }
+  if (!Array.isArray(data.options) || data.options.length < 2) {
+    throw new Error("Debe haber al menos 2 opciones de respuesta");
+  }
+  const cleanOptions = data.options.map((o) => o.trim());
+  if (cleanOptions.some((o) => !o)) {
+    throw new Error("Todas las opciones deben tener texto");
+  }
+  const correctIdx = Math.max(0, Math.min(cleanOptions.length - 1, Number(data.correctIndex) || 0));
+
+  await client.execute({
+    sql: `UPDATE questions
+          SET question = ?, options = ?, correct_index = ?, explanation = ?
+          WHERE id = ?`,
+    args: [cleanQ, JSON.stringify(cleanOptions), correctIdx, (data.explanation || "").trim(), id],
+  });
+
+  const res = await client.execute({
+    sql: "SELECT * FROM questions WHERE id = ?",
+    args: [id],
+  });
+  const row = res.rows[0];
+  if (!row) throw new Error("Pregunta no encontrada");
+
+  return {
+    id: Number(row.id),
+    orderNum: Number(row.order_num),
+    question: String(row.question),
+    options: JSON.parse(String(row.options)),
+    correctIndex: Number(row.correct_index),
+    explanation: String(row.explanation),
+  };
+}
+
+export async function resetQuestionsToDefault(): Promise<QuestionAdmin[]> {
+  await ensureSchema();
+  const client = getDatabase();
+
+  await client.execute("DELETE FROM questions");
+  await seedQuestions(client);
+  return getAllQuestionsAdmin();
 }
 
 export async function submitAnswer(payload: SubmitAnswerPayload): Promise<SubmitAnswerResponse> {
