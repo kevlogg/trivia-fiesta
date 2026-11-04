@@ -4,8 +4,29 @@ import { useEffect, useState, useCallback, useRef, Suspense } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { LeaderboardEntry, TriviaSettings, TriviaEvent } from "@/types/trivia";
-import { Trophy, Crown, Sparkles, Users, RotateCw, QrCode, Radio, Clock, ShieldCheck } from "lucide-react";
+import { LeaderboardEntry, TriviaSettings, TriviaEvent, QuestionAdmin } from "@/types/trivia";
+import {
+  Trophy,
+  Crown,
+  Sparkles,
+  Users,
+  RotateCw,
+  QrCode,
+  Radio,
+  Clock,
+  ShieldCheck,
+  Eye,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  LayoutGrid,
+  Presentation,
+  AlertTriangle,
+  X,
+  ArrowLeft,
+} from "lucide-react";
+
+const OPTION_LETTERS = ["A", "B", "C", "D"];
 
 function TvContent() {
   const searchParams = useSearchParams();
@@ -22,6 +43,14 @@ function TvContent() {
   const [currentUrl, setCurrentUrl] = useState<string>("");
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const pollTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Answers Reveal State
+  const [viewMode, setViewMode] = useState<"LEADERBOARD" | "REVEAL_ANSWERS">("LEADERBOARD");
+  const [showConfirmModal, setShowConfirmModal] = useState<boolean>(false);
+  const [questions, setQuestions] = useState<QuestionAdmin[]>([]);
+  const [isLoadingQuestions, setIsLoadingQuestions] = useState<boolean>(false);
+  const [currentSlideIndex, setCurrentSlideIndex] = useState<number>(0);
+  const [presentationLayout, setPresentationLayout] = useState<"SLIDES" | "GRID">("SLIDES");
 
   const fetchTvData = useCallback(async () => {
     try {
@@ -63,6 +92,48 @@ function TvContent() {
       if (pollTimerRef.current) clearInterval(pollTimerRef.current);
     };
   }, [fetchTvData]);
+
+  // Load questions for the answers reveal
+  const handleConfirmReveal = async () => {
+    setShowConfirmModal(false);
+    setIsLoadingQuestions(true);
+    try {
+      const targetId = activeEvent?.id || eventIdParam;
+      const url = targetId
+        ? `/api/tv/questions?eventId=${encodeURIComponent(targetId)}`
+        : "/api/tv/questions";
+
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        setQuestions(data.questions || []);
+        setCurrentSlideIndex(0);
+        setViewMode("REVEAL_ANSWERS");
+      }
+    } catch (err) {
+      console.error("Error loading questions for TV reveal:", err);
+    } finally {
+      setIsLoadingQuestions(false);
+    }
+  };
+
+  // Keyboard navigation for presentation slides (Left / Right Arrow)
+  useEffect(() => {
+    if (viewMode !== "REVEAL_ANSWERS") return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "ArrowRight" || e.key === " " || e.key === "Enter") {
+        setCurrentSlideIndex((prev) => (prev < questions.length - 1 ? prev + 1 : prev));
+      } else if (e.key === "ArrowLeft") {
+        setCurrentSlideIndex((prev) => (prev > 0 ? prev - 1 : prev));
+      } else if (e.key === "Escape") {
+        setViewMode("LEADERBOARD");
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [viewMode, questions.length]);
 
   const top1 = leaderboard[0];
   const top2 = leaderboard[1];
@@ -150,8 +221,244 @@ function TvContent() {
 
   // Target QR URL: explicitly encodes the event ID so this QR is 100% unique to this event!
   const qrEventUrl = activeEvent ? `${currentUrl}/?eventId=${activeEvent.id}` : currentUrl;
+  const currentSlide = questions[currentSlideIndex];
 
-  // 2. TV ACTIVE EVENT SCREEN: QR Code + Live Leaderboard & Podium
+  // 2. ANSWERS REVEAL MODE (ON-DEMAND TV PRESENTATION)
+  if (viewMode === "REVEAL_ANSWERS" && questions.length > 0) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white p-6 md:p-10 flex flex-col justify-between select-none relative">
+        {/* Header */}
+        <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4 mb-6">
+          <div className="flex items-center gap-4">
+            <div className="p-3 rounded-2xl bg-gradient-to-tr from-amber-500 via-purple-600 to-pink-500 shadow-xl shadow-amber-500/20">
+              <Eye className="w-8 h-8 text-white" />
+            </div>
+            <div>
+              <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-xs font-black bg-amber-500/20 text-amber-300 border border-amber-500/40 mb-1">
+                ⭐ REVELACIÓN DE RESPUESTAS OFICIALES
+              </span>
+              <h1 className="text-2xl md:text-4xl font-black text-white">
+                {settings.eventTitle}
+              </h1>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {/* View layout toggle */}
+            <div className="flex items-center rounded-2xl bg-slate-900 border border-slate-800 p-1">
+              <button
+                type="button"
+                onClick={() => setPresentationLayout("SLIDES")}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  presentationLayout === "SLIDES"
+                    ? "bg-purple-600 text-white shadow-md"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                <Presentation className="w-3.5 h-3.5" />
+                <span>Paso a Paso</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPresentationLayout("GRID")}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  presentationLayout === "GRID"
+                    ? "bg-purple-600 text-white shadow-md"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+                <span>Ver Todas (10)</span>
+              </button>
+            </div>
+
+            {/* Back to Leaderboard button */}
+            <button
+              type="button"
+              onClick={() => setViewMode("LEADERBOARD")}
+              className="px-4 py-2 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-100 font-bold text-xs flex items-center gap-2 border border-slate-700 transition-colors cursor-pointer"
+            >
+              <ArrowLeft className="w-4 h-4 text-purple-400" />
+              <span>Volver al Podio</span>
+            </button>
+          </div>
+        </header>
+
+        {/* Slide By Slide Presentation Mode */}
+        {presentationLayout === "SLIDES" && currentSlide && (
+          <div className="flex-1 flex flex-col justify-between max-w-5xl mx-auto w-full my-auto space-y-6">
+            {/* Question Quick Numbers Pill Bar */}
+            <div className="flex items-center justify-center gap-2 flex-wrap">
+              {questions.map((q, idx) => (
+                <button
+                  key={q.id}
+                  type="button"
+                  onClick={() => setCurrentSlideIndex(idx)}
+                  className={`w-9 h-9 rounded-xl font-black text-xs transition-all cursor-pointer ${
+                    currentSlideIndex === idx
+                      ? "bg-gradient-to-tr from-amber-500 to-yellow-400 text-slate-950 shadow-lg shadow-yellow-500/30 scale-110"
+                      : "bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:border-slate-700"
+                  }`}
+                >
+                  {idx + 1}
+                </button>
+              ))}
+            </div>
+
+            {/* Question Display Card */}
+            <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 md:p-10 shadow-2xl backdrop-blur-md relative overflow-hidden">
+              <div className="flex items-center justify-between mb-4">
+                <span className="text-xs font-black uppercase tracking-wider text-purple-400">
+                  Pregunta #{currentSlideIndex + 1} de {questions.length}
+                </span>
+                <span className="text-xs text-slate-500 font-mono">
+                  Usá las flechas ⬅ ➡ del teclado para cambiar de diapositiva
+                </span>
+              </div>
+
+              {/* Big Question Prompt */}
+              <h2 className="text-2xl md:text-4xl font-black text-white text-center leading-snug my-4">
+                {currentSlide.question}
+              </h2>
+
+              {/* 4 Options Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-8">
+                {currentSlide.options.map((option, optIdx) => {
+                  const letter = OPTION_LETTERS[optIdx] || `${optIdx + 1}`;
+                  const isCorrect = currentSlide.correctIndex === optIdx;
+
+                  if (isCorrect) {
+                    return (
+                      <div
+                        key={optIdx}
+                        className="p-5 rounded-2xl bg-gradient-to-r from-emerald-950/80 to-slate-900 border-2 border-emerald-400 text-white shadow-2xl shadow-emerald-500/20 flex items-center justify-between gap-3 transform scale-[1.02] transition-all"
+                      >
+                        <div className="flex items-center gap-3.5">
+                          <span className="w-10 h-10 rounded-xl bg-emerald-500 text-slate-950 font-black text-base flex items-center justify-center shrink-0 shadow-md">
+                            {letter}
+                          </span>
+                          <span className="text-lg md:text-xl font-black text-emerald-200">
+                            {option}
+                          </span>
+                        </div>
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400 font-black text-xs shrink-0 animate-bounce">
+                          <Crown className="w-3.5 h-3.5 text-yellow-300" /> ¡CORRECTA!
+                        </span>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div
+                      key={optIdx}
+                      className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800/80 text-slate-400 opacity-50 flex items-center gap-3.5"
+                    >
+                      <span className="w-9 h-9 rounded-xl bg-slate-800 text-slate-400 font-bold text-sm flex items-center justify-center shrink-0">
+                        {letter}
+                      </span>
+                      <span className="text-base font-semibold">{option}</span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Fun Curiosity / Explanation */}
+              {currentSlide.explanation && (
+                <div className="mt-8 p-4 rounded-2xl bg-purple-950/40 border border-purple-500/30 text-center animate-fadeIn">
+                  <span className="text-xs font-black text-amber-300 uppercase tracking-wider block mb-1">
+                    🎉 La Anécdota de {settings.birthdayPerson}:
+                  </span>
+                  <p className="text-sm md:text-base text-purple-200 font-medium italic">
+                    &ldquo;{currentSlide.explanation}&rdquo;
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Bottom Slide Controls */}
+            <div className="flex items-center justify-between pt-2">
+              <button
+                type="button"
+                disabled={currentSlideIndex === 0}
+                onClick={() => setCurrentSlideIndex((prev) => Math.max(0, prev - 1))}
+                className="px-5 py-2.5 rounded-2xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed font-bold text-sm flex items-center gap-2 cursor-pointer transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                <span>Anterior</span>
+              </button>
+
+              <span className="text-xs font-mono text-slate-400 font-bold">
+                {currentSlideIndex + 1} / {questions.length}
+              </span>
+
+              <button
+                type="button"
+                disabled={currentSlideIndex === questions.length - 1}
+                onClick={() => setCurrentSlideIndex((prev) => Math.min(questions.length - 1, prev + 1))}
+                className="px-5 py-2.5 rounded-2xl bg-purple-600 hover:bg-purple-500 text-white disabled:opacity-30 disabled:cursor-not-allowed font-bold text-sm flex items-center gap-2 cursor-pointer shadow-lg transition-colors"
+              >
+                <span>Siguiente</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Grid Mode: All 10 questions together */}
+        {presentationLayout === "GRID" && (
+          <div className="flex-1 overflow-y-auto max-w-6xl mx-auto w-full my-4 pr-1">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {questions.map((q) => {
+                const correctOption = q.options[q.correctIndex];
+                const correctLetter = OPTION_LETTERS[q.correctIndex] || `${q.correctIndex + 1}`;
+
+                return (
+                  <div
+                    key={q.id}
+                    className="p-5 rounded-3xl bg-slate-900/90 border border-slate-800 space-y-3"
+                  >
+                    <div className="flex items-start gap-2.5">
+                      <span className="w-7 h-7 rounded-xl bg-purple-900/50 text-purple-300 font-black text-xs flex items-center justify-center shrink-0 border border-purple-500/30">
+                        #{q.orderNum}
+                      </span>
+                      <h3 className="text-sm md:text-base font-bold text-white leading-snug">
+                        {q.question}
+                      </h3>
+                    </div>
+
+                    <div className="p-3 rounded-2xl bg-emerald-950/40 border border-emerald-500/40 text-emerald-200 text-xs flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="w-6 h-6 rounded-lg bg-emerald-500 text-slate-950 font-black text-[11px] flex items-center justify-center shrink-0">
+                          {correctLetter}
+                        </span>
+                        <span className="font-bold">{correctOption}</span>
+                      </div>
+                      <span className="text-[10px] font-black uppercase text-emerald-400 bg-emerald-500/20 px-2 py-0.5 rounded-full">
+                        CORRECTA ⭐
+                      </span>
+                    </div>
+
+                    {q.explanation && (
+                      <p className="text-xs text-slate-400 italic pl-1 border-l-2 border-purple-500/40">
+                        {q.explanation}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Footer */}
+        <footer className="text-center text-xs text-slate-500 pt-4 border-t border-slate-800">
+          Modo Presentación de Respuestas • Trivia de Fiesta en Vivo
+        </footer>
+      </div>
+    );
+  }
+
+  // 3. TV ACTIVE EVENT SCREEN: QR Code + Live Leaderboard & Podium
   return (
     <div className="min-h-screen bg-slate-950 text-white p-6 md:p-10 flex flex-col justify-between select-none">
       {/* Top Banner */}
@@ -170,7 +477,17 @@ function TvContent() {
           </div>
         </div>
 
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-4">
+          {/* New "Mostrar Respuestas Correctas" Button */}
+          <button
+            type="button"
+            onClick={() => setShowConfirmModal(true)}
+            className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-amber-500 via-orange-500 to-pink-500 hover:from-amber-600 hover:to-pink-600 text-slate-950 font-black text-xs md:text-sm flex items-center gap-2 shadow-xl shadow-amber-500/20 active:scale-95 transition-all cursor-pointer"
+          >
+            <Eye className="w-4 h-4 text-slate-950" />
+            <span>Mostrar Respuestas Correctas</span>
+          </button>
+
           <div className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-slate-900 border border-slate-800 text-slate-300 shadow-inner">
             <Users className="w-5 h-5 text-purple-400" />
             <span className="text-base font-extrabold">{leaderboard.length}</span>
@@ -338,6 +655,44 @@ function TvContent() {
           )}
         </div>
       </div>
+
+      {/* Confirmation Modal to avoid errors */}
+      {showConfirmModal && (
+        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-slate-900 border-2 border-amber-500/40 rounded-3xl p-6 shadow-2xl text-center space-y-4 animate-fadeIn">
+            <div className="w-14 h-14 rounded-2xl bg-amber-500/20 border border-amber-500/40 text-amber-300 flex items-center justify-center mx-auto">
+              <AlertTriangle className="w-7 h-7 text-amber-400" />
+            </div>
+
+            <h3 className="text-xl font-black text-white">
+              ¿Mostrar las Respuestas Correctas en la Pantalla Gigante?
+            </h3>
+
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Esta acción cambiará la pantalla TV a modo presentación y revelará la solución oficial y las anécdotas de las 10 preguntas a todos los invitados del salón.
+            </p>
+
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowConfirmModal(false)}
+                className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                onClick={handleConfirmReveal}
+                disabled={isLoadingQuestions}
+                className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-pink-500 hover:from-amber-600 hover:to-pink-600 text-slate-950 font-black text-xs shadow-lg transition-all cursor-pointer disabled:opacity-50"
+              >
+                {isLoadingQuestions ? "Cargando preguntas..." : "Sí, Revelar Respuestas"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Footer info */}
       <footer className="flex items-center justify-between text-xs text-slate-500 pt-6 border-t border-slate-800 mt-6">

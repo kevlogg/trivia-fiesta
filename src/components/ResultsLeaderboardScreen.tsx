@@ -216,60 +216,18 @@ export default function ResultsLeaderboardScreen({
           </div>
         </div>
 
-        {/* Toggle Detailed Answers */}
-        {answersList.length > 0 && (
-          <div className="mt-4 pt-3 border-t border-purple-500/20">
-            <button
-              onClick={() => setShowAnswersDetail(!showAnswersDetail)}
-              className="w-full flex items-center justify-between text-xs text-purple-300 hover:text-white font-bold cursor-pointer py-1"
-            >
-              <span>📋 Ver mis {answersList.length} respuestas detalladas</span>
-              {showAnswersDetail ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            </button>
-
-            {showAnswersDetail && (
-              <div className="mt-3 space-y-2 max-h-60 overflow-y-auto pr-1 text-xs">
-                {answersList.map((ans, idx) => (
-                  <div
-                    key={ans.id}
-                    className={`p-2.5 rounded-xl border ${
-                      ans.isCorrect
-                        ? "bg-emerald-950/30 border-emerald-500/30 text-emerald-200"
-                        : "bg-rose-950/30 border-rose-500/30 text-rose-200"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between font-bold mb-1">
-                      <span className="flex items-center gap-1.5 truncate max-w-[200px]">
-                        {ans.isCorrect ? (
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                        ) : (
-                          <XCircle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
-                        )}
-                        #{idx + 1}. {ans.questionText}
-                      </span>
-                      <span className="font-mono text-[10px] text-amber-300 font-semibold shrink-0">
-                        ⚡ {(ans.timeSpentMs / 1000).toFixed(2)}s
-                      </span>
-                    </div>
-
-                    <div className="text-[11px] text-slate-300 pl-5">
-                      {ans.selectedIndex !== null && ans.options[ans.selectedIndex] ? (
-                        <span>Tu respuesta: <strong className="text-white">{ans.options[ans.selectedIndex]}</strong></span>
-                      ) : (
-                        <span className="text-rose-400 italic">No respondiste a tiempo</span>
-                      )}
-                      {!ans.isCorrect && (
-                        <div className="text-emerald-400 font-semibold mt-0.5">
-                          Correcta: {ans.options[ans.correctIndex]}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+        {/* Notice: Answers revealed on TV */}
+        <div className="mt-4 pt-3 border-t border-purple-500/20 text-center">
+          <div className="p-3 rounded-2xl bg-purple-900/30 border border-purple-500/30 text-xs text-purple-200 space-y-1">
+            <p className="font-extrabold text-amber-300 flex items-center justify-center gap-1.5">
+              <span>💡</span>
+              <span>¡Respuestas Oficiales en la Pantalla TV!</span>
+            </p>
+            <p className="text-[11px] text-slate-300">
+              Las respuestas correctas y anécdotas de cada pregunta serán reveladas en la pantalla gigante de la fiesta al cierre del juego.
+            </p>
           </div>
-        )}
+        </div>
       </div>
 
       {/* Visual Top 3 Podium */}
