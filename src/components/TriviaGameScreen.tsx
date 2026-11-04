@@ -13,7 +13,7 @@ interface TriviaGameScreenProps {
   onPlayerScoreUpdate?: (newScore: number, totalTimeMs: number) => void;
 }
 
-const TOTAL_QUESTION_TIME_SEC = 10;
+const TOTAL_QUESTION_TIME_SEC = 15;
 const OPTION_LETTERS = ["A", "B", "C", "D"];
 const FEEDBACK_DELAY_MS = 600; // 0.6s smooth transition to next question
 
@@ -378,7 +378,7 @@ export default function TriviaGameScreen({
                     </span>
                   ) : (
                     <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40">
-                      ⏱️ ¡Tiempo agotado! (10.0s)
+                      ⏱️ ¡Tiempo agotado! (15.0s)
                     </span>
                   )}
                 </div>
@@ -401,7 +401,7 @@ export default function TriviaGameScreen({
 
       {/* Footer Info */}
       <footer className="text-center shrink-0 pt-0.5 text-slate-500 text-[11px]">
-        ⏱️ 10s por pregunta • El resultado se revela al finalizar
+        ⏱️ 15s por pregunta • El resultado se revela al finalizar
       </footer>
     </div>
   );

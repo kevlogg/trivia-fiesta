@@ -383,7 +383,7 @@ function AdminContent() {
 
           <div className="flex items-center justify-between pt-2">
             <span className="text-xs text-slate-500">
-              ⚡ Temporizador: <strong>10 segundos</strong> estrictos por pregunta
+              ⚡ Temporizador: <strong>15 segundos</strong> estrictos por pregunta
             </span>
 
             <button
@@ -635,22 +635,6 @@ function AdminContent() {
                     </div>
                   </div>
 
-                  {/* Explanation */}
-                  <div>
-                    <label className="block font-bold text-slate-200 mb-1">
-                      Curiosidad / Explicación divertida (se muestra tras responder)
-                    </label>
-                    <input
-                      type="text"
-                      value={editDraft.explanation}
-                      onChange={(e) =>
-                        setEditDraft({ ...editDraft, explanation: e.target.value })
-                      }
-                      placeholder="Ej: ¡Las milanesas bien crocantes no se negocian jamás!"
-                      className="w-full px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-700 text-slate-300 text-xs focus:outline-none focus:ring-2 focus:ring-purple-500"
-                    />
-                  </div>
-
                   {/* Form Actions */}
                   <div className="flex items-center justify-end gap-2 pt-2 border-t border-purple-500/20">
                     <button
@@ -733,12 +717,6 @@ function AdminContent() {
                     );
                   })}
                 </div>
-
-                {q.explanation && (
-                  <p className="text-[11px] text-slate-400 italic pt-1 border-t border-slate-800/80">
-                    Curiosidad: {q.explanation}
-                  </p>
-                )}
               </div>
             );
           })}

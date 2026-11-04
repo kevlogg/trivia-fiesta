@@ -15,7 +15,7 @@ async function testMultiEvents() {
   const event1 = await createEvent({
     title: "Cumple de Sofía 30",
     birthdayPerson: "Sofía",
-    timerSeconds: 10,
+    timerSeconds: 15,
     status: "active",
   });
   console.log(`✓ 1. Evento 1 creado y activado: "${event1.title}" (${event1.id})`);
@@ -31,7 +31,7 @@ async function testMultiEvents() {
   const event2 = await createEvent({
     title: "Casamiento Laura & Nico",
     birthdayPerson: "Laura y Nico",
-    timerSeconds: 10,
+    timerSeconds: 15,
     status: "inactive",
   });
   console.log(`✓ 3. Evento 2 creado (inactivo): "${event2.title}" (${event2.id})`);

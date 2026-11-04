@@ -40,7 +40,7 @@ export default function SuperAdminPage() {
 
   const [newEventTitle, setNewEventTitle] = useState("");
   const [newEventBirthdayPerson, setNewEventBirthdayPerson] = useState("");
-  const [newEventTimer, setNewEventTimer] = useState(10);
+  const [newEventTimer, setNewEventTimer] = useState(15);
   const [activateImmediately, setActivateImmediately] = useState(true);
   const [isSubmittingCreate, setIsSubmittingCreate] = useState(false);
   const [actionMessage, setActionMessage] = useState("");

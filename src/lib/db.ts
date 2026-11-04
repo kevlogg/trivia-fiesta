@@ -57,7 +57,7 @@ export async function ensureSchema(): Promise<void> {
       slug TEXT UNIQUE NOT NULL,
       title TEXT NOT NULL,
       birthday_person TEXT NOT NULL,
-      timer_seconds INTEGER NOT NULL DEFAULT 10,
+      timer_seconds INTEGER NOT NULL DEFAULT 15,
       status TEXT NOT NULL DEFAULT 'inactive',
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
@@ -163,9 +163,16 @@ export async function ensureSchema(): Promise<void> {
     const now = new Date().toISOString();
     await client.execute({
       sql: `INSERT INTO events (id, slug, title, birthday_person, timer_seconds, status, created_at, updated_at)
-            VALUES ('default-event', 'cumple-principal', '🎉 Trivia de Cumpleaños', 'el Cumpleañero', 10, 'active', ?, ?)`,
+            VALUES ('default-event', 'cumple-principal', '🎉 Trivia de Cumpleaños', 'el Cumpleañero', 15, 'active', ?, ?)`,
       args: [now, now],
     });
+  }
+
+  // Update existing events timer to 15s
+  try {
+    await client.execute("UPDATE events SET timer_seconds = 15 WHERE timer_seconds = 10");
+  } catch {
+    // ignore
   }
 
   // Check if questions exist for default-event

@@ -361,18 +361,6 @@ function TvContent() {
                   );
                 })}
               </div>
-
-              {/* Fun Curiosity / Explanation */}
-              {currentSlide.explanation && (
-                <div className="mt-8 p-4 rounded-2xl bg-purple-950/40 border border-purple-500/30 text-center animate-fadeIn">
-                  <span className="text-xs font-black text-amber-300 uppercase tracking-wider block mb-1">
-                    🎉 La Anécdota de {settings.birthdayPerson}:
-                  </span>
-                  <p className="text-sm md:text-base text-purple-200 font-medium italic">
-                    &ldquo;{currentSlide.explanation}&rdquo;
-                  </p>
-                </div>
-              )}
             </div>
 
             {/* Bottom Slide Controls */}
@@ -437,12 +425,6 @@ function TvContent() {
                         CORRECTA ⭐
                       </span>
                     </div>
-
-                    {q.explanation && (
-                      <p className="text-xs text-slate-400 italic pl-1 border-l-2 border-purple-500/40">
-                        {q.explanation}
-                      </p>
-                    )}
                   </div>
                 );
               })}
@@ -530,7 +512,7 @@ function TvContent() {
           <ol className="text-left text-xs text-slate-400 space-y-1.5 font-medium">
             <li>1️⃣ Abrí la cámara de tu celular y apuntá al QR.</li>
             <li>2️⃣ Ingresá tu nombre y apellido (¡sin registro!).</li>
-            <li>3️⃣ ¡Tenés 10 segundos por pregunta! El tiempo desempata.</li>
+            <li>3️⃣ ¡Tenés 15 segundos por pregunta! El tiempo desempata.</li>
           </ol>
         </div>
 

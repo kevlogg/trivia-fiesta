@@ -128,7 +128,7 @@ export default function RegistrationScreen({
           <div className="flex items-center gap-1.5 p-2 rounded-xl bg-slate-900/80 border border-slate-800">
             <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
             <span className="truncate">
-              <strong>10s</strong> por pregunta
+              <strong>15s</strong> por pregunta
             </span>
           </div>
           <div className="flex items-center gap-1.5 p-2 rounded-xl bg-slate-900/80 border border-slate-800">
@@ -232,7 +232,7 @@ export default function RegistrationScreen({
 
       {/* Footer Instructions */}
       <footer className="text-center shrink-0 pt-1 text-slate-500 text-[11px]">
-        Sin login • 10 segundos por pregunta • Ranking en vivo
+        Sin login • 15 segundos por pregunta • Podio en pantalla TV
       </footer>
     </div>
   );

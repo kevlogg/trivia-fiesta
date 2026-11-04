@@ -98,7 +98,7 @@ export async function createEvent(data: {
 
   const title = data.title.trim();
   const birthdayPerson = data.birthdayPerson.trim();
-  const timerSeconds = data.timerSeconds || 10;
+  const timerSeconds = data.timerSeconds || 15;
   const id = `evt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
   const slug = `${birthdayPerson.toLowerCase().replace(/[^a-z0-9]/g, "-")}-${Date.now().toString(36)}`;
   const now = new Date().toISOString();
@@ -400,7 +400,7 @@ export async function submitAnswer(payload: SubmitAnswerPayload): Promise<Submit
   const client = getDatabase();
 
   const { playerId, questionId, selectedIndex } = payload;
-  const timeSpentMs = Math.max(0, Math.min(10000, Math.round(payload.timeSpentMs || 10000)));
+  const timeSpentMs = Math.max(0, Math.min(15000, Math.round(payload.timeSpentMs || 15000)));
 
   const playerRes = await client.execute({
     sql: "SELECT * FROM players WHERE id = ?",
@@ -593,7 +593,7 @@ export async function getSettings(eventId?: string): Promise<TriviaSettings> {
     return {
       birthdayPerson: "el Cumpleañero",
       eventTitle: "🎉 Trivia de Cumpleaños",
-      questionTimerSeconds: 10,
+      questionTimerSeconds: 15,
     };
   }
   return {
