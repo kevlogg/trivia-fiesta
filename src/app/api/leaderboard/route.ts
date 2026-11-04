@@ -23,6 +23,15 @@ export async function GET(request: Request) {
       });
     }
 
+    if (event.status === "inactive") {
+      return NextResponse.json({
+        hasActiveEvent: false,
+        event,
+        leaderboard: [],
+        stats: { totalPlayers: 0, finishedCount: 0, topScore: 0 },
+      });
+    }
+
     const leaderboard = await getLeaderboard(event.id);
     const finishedPlayers = leaderboard.filter((p) => p.isFinished);
     const totalPlayers = leaderboard.length;

@@ -64,10 +64,11 @@ function HomeContent() {
         questionTimerSeconds: currentEvent.timerSeconds || 10,
       });
 
-      // Check if player has an existing session in localStorage
+      // Check if player has an existing session in localStorage for this event
+      const perEventKey = `trivia_player_${currentEvent.id}`;
       const savedPlayerId =
         typeof window !== "undefined"
-          ? localStorage.getItem("trivia_current_player_id")
+          ? localStorage.getItem(perEventKey) || localStorage.getItem("trivia_current_player_id")
           : null;
 
       if (savedPlayerId) {
@@ -103,6 +104,7 @@ function HomeContent() {
             } else {
               // Player was registered for an older event: reset stored id
               if (typeof window !== "undefined") {
+                localStorage.removeItem(perEventKey);
                 localStorage.removeItem("trivia_current_player_id");
               }
             }
@@ -158,6 +160,10 @@ function HomeContent() {
 
   // When player completes registration
   const handleRegistered = (newPlayer: Player) => {
+    if (typeof window !== "undefined" && newPlayer.eventId) {
+      localStorage.setItem(`trivia_player_${newPlayer.eventId}`, newPlayer.id);
+      localStorage.setItem("trivia_current_player_id", newPlayer.id);
+    }
     setPlayer(newPlayer);
     setInitialQuestionIndex(0);
     setPhase("PLAYING");
@@ -176,6 +182,9 @@ function HomeContent() {
   // Reset to registration for a new player
   const handlePlayAgain = () => {
     if (typeof window !== "undefined") {
+      if (activeEvent?.id) {
+        localStorage.removeItem(`trivia_player_${activeEvent.id}`);
+      }
       localStorage.removeItem("trivia_current_player_id");
     }
     setPlayer(null);

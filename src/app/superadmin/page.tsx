@@ -89,12 +89,13 @@ export default function SuperAdminPage() {
     }
   }, [isAuthenticated, fetchEvents]);
 
-  const handleActivateEvent = async (eventId: string | null) => {
+  const handleToggleEventStatus = async (eventId: string, currentStatus: "active" | "inactive") => {
+    const targetStatus = currentStatus === "active" ? "inactive" : "active";
     try {
       const res = await fetch("/api/superadmin/events/activate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ eventId }),
+        body: JSON.stringify({ eventId, status: targetStatus }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -103,7 +104,26 @@ export default function SuperAdminPage() {
         fetchEvents();
       }
     } catch (err) {
-      console.error("Error activating event:", err);
+      console.error("Error updating event status:", err);
+    }
+  };
+
+  const handleDeactivateAll = async () => {
+    if (!confirm("¿Deseas poner TODOS los eventos en Modo Espera?")) return;
+    try {
+      const res = await fetch("/api/superadmin/events/activate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ deactivateAll: true }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setActionMessage(data.message);
+        setTimeout(() => setActionMessage(""), 4000);
+        fetchEvents();
+      }
+    } catch (err) {
+      console.error("Error deactivating all:", err);
     }
   };
 
@@ -211,7 +231,8 @@ export default function SuperAdminPage() {
     );
   }
 
-  const activeEvent = events.find((e) => e.status === "active");
+  const activeEvents = events.filter((e) => e.status === "active");
+  const hasActiveEvents = activeEvents.length > 0;
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
@@ -226,14 +247,14 @@ export default function SuperAdminPage() {
               Central SuperAdmin
             </span>
             <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 text-[10px] font-bold">
-              Multi-Evento
+              Multi-Evento Simultáneo
             </span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-black text-white">
             Gestor de Eventos y Fiestas
           </h1>
           <p className="text-xs sm:text-sm text-slate-400 mt-1">
-            Creá eventos, activá cuál se proyecta en la TV y descargá los códigos QR individuales de cada fiesta.
+            Cada evento tiene su propia pantalla de TV, panel de organizador y código QR, pudiendo funcionar en simultáneo.
           </p>
         </div>
 
@@ -268,18 +289,22 @@ export default function SuperAdminPage() {
         <div className="flex items-center gap-3.5">
           <div
             className={`w-3.5 h-3.5 rounded-full ${
-              activeEvent ? "bg-emerald-500 animate-ping" : "bg-rose-500"
+              hasActiveEvents ? "bg-emerald-500 animate-ping" : "bg-rose-500"
             }`}
           />
           <div>
             <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
-              Estado Global en Vivo
+              Estado de Eventos en Vivo
             </span>
-            <div className="text-base font-extrabold text-white flex items-center gap-2">
-              {activeEvent ? (
+            <div className="text-base font-extrabold text-white flex flex-wrap items-center gap-2">
+              {hasActiveEvents ? (
                 <>
-                  <span className="text-emerald-400">EN VIVO:</span>
-                  <span>{activeEvent.title}</span>
+                  <span className="text-emerald-400">
+                    🟢 {activeEvents.length} EVENTO{activeEvents.length > 1 ? "S" : ""} EN VIVO SIMULTÁNEO{activeEvents.length > 1 ? "S" : ""}:
+                  </span>
+                  <span className="text-slate-200">
+                    {activeEvents.map((e) => e.title).join(" • ")}
+                  </span>
                 </>
               ) : (
                 <span className="text-amber-400">
@@ -291,13 +316,14 @@ export default function SuperAdminPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          {activeEvent ? (
+          {hasActiveEvents ? (
             <button
-              onClick={() => handleActivateEvent(null)}
+              onClick={handleDeactivateAll}
               className="px-4 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer"
+              title="Poner todos los eventos en Modo Espera"
             >
               <Pause className="w-4 h-4" />
-              <span>Desactivar Todo (Poner en Espera)</span>
+              <span>Pausar Todos ({activeEvents.length})</span>
             </button>
           ) : null}
 
@@ -307,7 +333,7 @@ export default function SuperAdminPage() {
             className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold flex items-center gap-1.5 transition-colors"
           >
             <Tv className="w-4 h-4 text-purple-400" />
-            <span>Ver Pantalla TV</span>
+            <span>TV Global</span>
           </Link>
         </div>
       </div>
@@ -392,27 +418,40 @@ export default function SuperAdminPage() {
                     <div className="flex flex-wrap items-center gap-2">
                       {isLive ? (
                         <button
-                          onClick={() => handleActivateEvent(null)}
-                          className="px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 font-bold text-xs flex items-center gap-1 cursor-pointer"
+                          onClick={() => handleToggleEventStatus(evt.id, "active")}
+                          className="px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 font-bold text-xs flex items-center gap-1 cursor-pointer transition-colors"
+                          title="Pausar solo este evento"
                         >
                           <Pause className="w-3.5 h-3.5" />
                           <span>Pausar</span>
                         </button>
                       ) : (
                         <button
-                          onClick={() => handleActivateEvent(evt.id)}
-                          className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1 shadow-md cursor-pointer"
+                          onClick={() => handleToggleEventStatus(evt.id, "inactive")}
+                          className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1 shadow-md cursor-pointer transition-colors"
+                          title="Activar este evento en vivo (simultáneo con otros)"
                         >
                           <Play className="w-3.5 h-3.5" />
                           <span>Activar en Vivo</span>
                         </button>
                       )}
 
+                      {/* TV Screen Button for this specific event */}
+                      <Link
+                        href={`/tv?eventId=${evt.id}`}
+                        target="_blank"
+                        className="px-3 py-1.5 rounded-xl bg-purple-950/60 hover:bg-purple-900/80 border border-purple-500/30 text-purple-200 font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-colors"
+                        title="Abrir pantalla de TV para proyectar este evento"
+                      >
+                        <Tv className="w-3.5 h-3.5 text-purple-400" />
+                        <span>Pantalla TV</span>
+                      </Link>
+
                       {/* View & Download QR Button */}
                       <button
                         type="button"
                         onClick={() => setQrModalEvent(evt)}
-                        className="px-3 py-1.5 rounded-xl bg-purple-600/25 hover:bg-purple-600/40 border border-purple-500/40 text-purple-300 font-bold text-xs flex items-center gap-1.5 cursor-pointer"
+                        className="px-3 py-1.5 rounded-xl bg-purple-600/25 hover:bg-purple-600/40 border border-purple-500/40 text-purple-300 font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-colors"
                         title="Ver y descargar el código QR de este evento"
                       >
                         <QrCode className="w-3.5 h-3.5" />
@@ -422,7 +461,7 @@ export default function SuperAdminPage() {
                       <Link
                         href={`/admin?eventId=${evt.id}`}
                         target="_blank"
-                        className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs flex items-center gap-1 cursor-pointer"
+                        className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs flex items-center gap-1 cursor-pointer transition-colors"
                         title="Abrir panel de organizador de este evento"
                       >
                         <span>Organizador</span>

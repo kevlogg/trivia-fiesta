@@ -20,7 +20,7 @@ export async function getActiveEvent(): Promise<TriviaEvent | null> {
   await ensureSchema();
   const client = getDatabase();
 
-  const res = await client.execute("SELECT * FROM events WHERE status = 'active' LIMIT 1");
+  const res = await client.execute("SELECT * FROM events WHERE status = 'active' ORDER BY updated_at DESC LIMIT 1");
   const row = res.rows[0];
   if (!row) return null;
 
@@ -34,6 +34,34 @@ export async function getActiveEvent(): Promise<TriviaEvent | null> {
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
   };
+}
+
+export async function getActiveEvents(): Promise<TriviaEvent[]> {
+  await ensureSchema();
+  const client = getDatabase();
+
+  const res = await client.execute(`
+    SELECT 
+      e.*,
+      (SELECT COUNT(*) FROM players WHERE event_id = e.id) as players_count,
+      (SELECT COUNT(*) FROM questions WHERE event_id = e.id) as questions_count
+    FROM events e
+    WHERE e.status = 'active'
+    ORDER BY e.updated_at DESC
+  `);
+
+  return res.rows.map((row) => ({
+    id: String(row.id),
+    slug: String(row.slug),
+    title: String(row.title),
+    birthdayPerson: String(row.birthday_person),
+    timerSeconds: Number(row.timer_seconds || 10),
+    status: row.status as "active" | "inactive" | "finished",
+    createdAt: String(row.created_at),
+    updatedAt: String(row.updated_at),
+    playersCount: Number(row.players_count || 0),
+    questionsCount: Number(row.questions_count || 0),
+  }));
 }
 
 export async function getAllEvents(): Promise<TriviaEvent[]> {
@@ -105,11 +133,7 @@ export async function createEvent(data: {
   const isActivate = Boolean(data.activateNow || data.status === "active");
   const status = isActivate ? "active" : "inactive";
 
-  if (isActivate) {
-    // Deactivate all others first
-    await client.execute("UPDATE events SET status = 'inactive'");
-  }
-
+  // Note: multiple events can be active simultaneously in multi-room/multi-screen mode
   await client.execute({
     sql: `INSERT INTO events (id, slug, title, birthday_person, timer_seconds, status, created_at, updated_at)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -131,18 +155,34 @@ export async function createEvent(data: {
   };
 }
 
-export async function setActiveEvent(eventId: string | null): Promise<void> {
+export async function setEventStatus(eventId: string, status: "active" | "inactive"): Promise<void> {
   await ensureSchema();
   const client = getDatabase();
+  const now = new Date().toISOString();
 
-  // First deactivate all
-  await client.execute("UPDATE events SET status = 'inactive'");
+  await client.execute({
+    sql: "UPDATE events SET status = ?, updated_at = ? WHERE id = ?",
+    args: [status, now, eventId],
+  });
+}
 
-  if (eventId && eventId !== "none") {
-    await client.execute({
-      sql: "UPDATE events SET status = 'active', updated_at = ? WHERE id = ?",
-      args: [new Date().toISOString(), eventId],
-    });
+export async function deactivateAllEvents(): Promise<void> {
+  await ensureSchema();
+  const client = getDatabase();
+  const now = new Date().toISOString();
+
+  await client.execute({
+    sql: "UPDATE events SET status = 'inactive', updated_at = ?",
+    args: [now],
+  });
+}
+
+export async function setActiveEvent(eventId: string | null): Promise<void> {
+  await ensureSchema();
+  if (!eventId || eventId === "none") {
+    await deactivateAllEvents();
+  } else {
+    await setEventStatus(eventId, "active");
   }
 }
 
@@ -153,10 +193,6 @@ export async function updateEvent(
   await ensureSchema();
   const client = getDatabase();
   const now = new Date().toISOString();
-
-  if (data.status === "active") {
-    await client.execute("UPDATE events SET status = 'inactive'");
-  }
 
   const existing = await getEventById(id);
   if (!existing) throw new Error("Evento no encontrado");
