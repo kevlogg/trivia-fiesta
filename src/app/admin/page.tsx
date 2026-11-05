@@ -20,7 +20,6 @@ import {
   Check,
   RotateCcw,
   Sparkles,
-  ShieldCheck,
   ArrowLeft,
   QrCode,
   Download,
@@ -268,15 +267,8 @@ function AdminContent() {
         </p>
         <div className="flex items-center justify-center gap-3">
           <Link
-            href="/superadmin"
-            className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-sm shadow-lg flex items-center gap-2"
-          >
-            <ShieldCheck className="w-4 h-4" />
-            <span>Ir al Panel SuperAdmin</span>
-          </Link>
-          <Link
             href="/"
-            className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-sm"
+            className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-sm shadow-lg"
           >
             Volver al Inicio
           </Link>
@@ -328,13 +320,6 @@ function AdminContent() {
           >
             <Smartphone className="w-4 h-4 text-pink-400" />
             <span>Celular</span>
-          </Link>
-          <Link
-            href="/superadmin"
-            className="px-3.5 py-2 rounded-xl bg-purple-950/60 border border-purple-500/40 hover:bg-purple-900/60 text-purple-300 text-xs font-bold flex items-center gap-1.5 transition-all"
-          >
-            <ShieldCheck className="w-4 h-4 text-purple-400" />
-            <span>SuperAdmin</span>
           </Link>
         </div>
       </header>
